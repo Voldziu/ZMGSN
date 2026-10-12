@@ -38,6 +38,8 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 def split_text_into_chunks(text_path: str) -> str:
     """Split a text file into smaller chunk files that fit into a prompt.
 
+    Only the leading chunks of a long document are kept.
+
     Args:
         text_path: Workspace-relative path of the text file.
 

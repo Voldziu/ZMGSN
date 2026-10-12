@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Sequence
+from datetime import date
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, ConfigDict
@@ -12,7 +13,7 @@ from tool_eval.services.arxiv import ArxivPaper, fetch_arxiv_papers, search_arxi
 from tool_eval.services.formatting import format_apa_citation
 from tool_eval.services.papers import summarize_paper
 from tool_eval.utils.paths import require_text_suffix, resolve_in_workspace, to_ref
-from tool_eval.utils.text import write_text
+from tool_eval.utils.text import append_text, write_text
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,77 @@ class ReviewResult(BaseModel):
     review_path: str
     papers_included: int
     papers_failed: list[str]
+
+
+class CitedPaper(BaseModel):
+    """A search hit with its ready-made APA reference."""
+
+    model_config = ConfigDict(frozen=True)
+
+    arxiv_id: str
+    title: str
+    published: date
+    apa_citation: str
+
+
+def search_cited_papers(query: str, *, max_results: int, settings: Settings) -> list[CitedPaper]:
+    """Search arXiv inside the configured date window and format each hit as an APA reference.
+
+    Args:
+        query: Keywords describing the topic.
+        max_results: Maximum number of papers.
+        settings: Application settings.
+
+    Returns:
+        Papers, newest first.
+    """
+    papers = search_arxiv(
+        query,
+        max_results=max_results,
+        date_from=settings.arxiv_date_from,
+        date_to=settings.arxiv_date_to,
+        timeout=settings.http_timeout_seconds,
+    )
+    return [
+        CitedPaper(
+            arxiv_id=paper.arxiv_id,
+            title=paper.title,
+            published=paper.published,
+            apa_citation=_citation(paper),
+        )
+        for paper in papers
+    ]
+
+
+def append_to_review(markdown: str, *, settings: Settings) -> str:
+    """Append Markdown to the review file, creating it if needed.
+
+    Args:
+        markdown: Text to append.
+        settings: Application settings.
+
+    Returns:
+        Workspace-relative path of the review file.
+    """
+    dest = resolve_in_workspace(REVIEW_PATH, workspace=settings.workspace_dir)
+    append_text(dest, markdown.rstrip() + "\n\n", max_bytes=settings.max_file_bytes)
+    return to_ref(dest, workspace=settings.workspace_dir)
+
+
+def append_bibliography(arxiv_ids: Sequence[str], *, settings: Settings) -> str:
+    """Append a `## Bibliography` section with sorted APA references to the review file.
+
+    Args:
+        arxiv_ids: arXiv identifiers.
+        settings: Application settings.
+
+    Returns:
+        Workspace-relative path of the review file.
+    """
+    papers = fetch_arxiv_papers(arxiv_ids, timeout=settings.http_timeout_seconds)
+    entries = sorted(_citation(paper) for paper in papers)
+    section = "## Bibliography\n\n" + "\n".join(f"- {entry}" for entry in entries)
+    return append_to_review(section, settings=settings)
 
 
 def write_bibliography(arxiv_ids: Sequence[str], *, output_ref: str, settings: Settings) -> str:

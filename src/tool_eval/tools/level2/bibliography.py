@@ -18,3 +18,16 @@ def generate_bibliography(arxiv_ids: list[str], output_path: str = "bibliography
         Workspace-relative path of the bibliography file.
     """
     return reports.write_bibliography(arxiv_ids, output_ref=output_path, settings=get_settings())
+
+
+@tool(parse_docstring=True)
+def append_bibliography(arxiv_ids: list[str]) -> str:
+    """Append a "## Bibliography" section with alphabetical APA references to reviews/review.md.
+
+    Args:
+        arxiv_ids: arXiv identifiers of the reviewed papers.
+
+    Returns:
+        Workspace-relative path of the review file.
+    """
+    return reports.append_bibliography(arxiv_ids, settings=get_settings())

@@ -1,11 +1,15 @@
 """Runs scenarios against tool levels, one isolated workspace per run, appending JSONL records."""
 
+import hashlib
+import json
 import logging
+import re
 import shutil
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+import openai
 from langgraph.errors import GraphRecursionError
 
 from tool_eval.agent import build_agent, run_task
@@ -13,11 +17,37 @@ from tool_eval.config import Settings, use_settings
 from tool_eval.evaluation.checks import Lookup, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
-from tool_eval.exceptions import ExternalServiceError
+from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.prompts import load_prompt
 from tool_eval.services.reports import REVIEW_PATH
 
 logger = logging.getLogger(__name__)
+
+_CONTEXT_OVERFLOW = re.compile(r"context[ _](?:size|length|window)", re.IGNORECASE)
+
+
+def config_fingerprint(settings: Settings) -> str:
+    """Hash every setting that changes run results, so incomparable runs can be told apart.
+
+    Args:
+        settings: Settings of the run.
+
+    Returns:
+        Hex SHA-256 digest.
+    """
+    payload = {
+        "model": settings.llm_model,
+        "temperature": settings.agent_temperature,
+        "max_steps": settings.agent_max_steps,
+        "prompt_version": settings.prompt_version,
+        "system_prompt": load_prompt("system", settings.prompt_version).sha256,
+        "task_prompt": load_prompt("evaluation", settings.prompt_version).sha256,
+        "review_paper_count": settings.review_paper_count,
+        "chunk_size": settings.chunk_size,
+        "text_max_chars": settings.text_max_chars,
+        "pipeline_max_chunks": settings.pipeline_max_chunks,
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
 def run_evaluation(
@@ -33,7 +63,8 @@ def run_evaluation(
     """Run every (repeat, scenario, level) combination that has no stored result yet.
 
     Runs are interleaved by repeat so an interrupted evaluation still has balanced data.
-    Runs that ended in `error` are retried on the next invocation.
+    Runs that ended in `error` (infrastructure failures) are retried on the next invocation;
+    `failed` runs are scored and kept.
 
     Args:
         scenarios: Scenarios to execute.
@@ -46,9 +77,12 @@ def run_evaluation(
 
     Returns:
         Number of runs executed in this invocation.
+
+    Raises:
+        InvalidInputError: If `output` holds finished runs made with a different configuration.
     """
     output.parent.mkdir(parents=True, exist_ok=True)
-    done = _finished_runs(output)
+    done = _finished_runs(output, config_fingerprint(settings))
     executed = 0
     for repeat in range(1, repeats + 1):
         for scenario in scenarios:
@@ -96,7 +130,8 @@ def run_single(
         lookup: Resolves arXiv ids to metadata for the outcome checks.
 
     Returns:
-        The record of this run; infrastructure failures yield `status="error"`.
+        The record of this run; infrastructure failures yield `status="error"`, agent-caused
+        context overflows `status="failed"`.
     """
     run_id = _run_id(level, scenario.id, repeat)
     workspace = runs_dir / run_id
@@ -128,9 +163,10 @@ def run_single(
             run_task(agent, task, max_steps=run_settings.agent_max_steps, callbacks=[meter])
         except GraphRecursionError:
             status = "step_limit"
-        except Exception as exc:  # noqa: BLE001 - infrastructure failure, recorded not hidden
+        except Exception as exc:  # noqa: BLE001 - recorded, not hidden
             logger.exception("Run %s failed", run_id)
-            status, error = "error", f"{type(exc).__name__}: {exc}"
+            status = "failed" if _is_context_overflow(exc) else "error"
+            error = f"{type(exc).__name__}: {exc}"
 
     outcome: OutcomeScore | None = None
     if status != "error":
@@ -159,6 +195,11 @@ def run_single(
         prompt_version=run_settings.prompt_version,
         system_prompt_sha256=system_prompt.sha256,
         task_prompt_sha256=task_prompt.sha256,
+        review_paper_count=run_settings.review_paper_count,
+        chunk_size=run_settings.chunk_size,
+        text_max_chars=run_settings.text_max_chars,
+        pipeline_max_chunks=run_settings.pipeline_max_chunks,
+        config_sha256=config_fingerprint(run_settings),
         date_from=scenario.date_from,
         date_to=scenario.date_to,
         started_at=started_at,
@@ -169,13 +210,24 @@ def _run_id(level: str, scenario_id: str, repeat: int) -> str:
     return f"{level}-{scenario_id}-{repeat:02d}"
 
 
-def _finished_runs(output: Path) -> set[str]:
+def _is_context_overflow(exc: Exception) -> bool:
+    return isinstance(exc, openai.BadRequestError) and bool(_CONTEXT_OVERFLOW.search(str(exc)))
+
+
+def _finished_runs(output: Path, fingerprint: str) -> set[str]:
     if not output.is_file():
         return set()
     finished: set[str] = set()
     for line in output.read_text(encoding="utf-8").splitlines():
         if line.strip():
             record = RunRecord.model_validate_json(line)
-            if record.status != "error":
-                finished.add(record.run_id)
+            if record.status == "error":
+                continue
+            if record.config_sha256 != fingerprint:
+                msg = (
+                    f"{output} holds run {record.run_id} made with a different configuration; "
+                    "use another --output file or restore the original settings."
+                )
+                raise InvalidInputError(msg)
+            finished.add(record.run_id)
     return finished

@@ -3,6 +3,8 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx2
+import openai
 import pytest
 from langchain.agents import create_agent
 from langchain_core.language_models import GenericFakeChatModel
@@ -31,7 +33,8 @@ from tool_eval.main import main
 from tool_eval.prompts import load_prompt
 from tool_eval.services import reports
 from tool_eval.services.arxiv import ArxivPaper
-from tool_eval.services.papers import PaperSummary
+from tool_eval.services.papers import PaperSummary, split_paper_text
+from tool_eval.tools.registry import get_tools
 
 SCENARIO = Scenario(
     id="demo",
@@ -456,3 +459,102 @@ def test_cli_report_prints_and_rejects_missing_file(
     assert main(["report", str(results)]) == 0
     assert "Evaluation report" in capsys.readouterr().out
     assert main(["report", str(tmp_path / "missing.jsonl")]) == 2
+
+
+# --- level parity, failure classification, config guard -----------------------------
+
+
+def test_every_level_can_search_summarize_and_write() -> None:
+    required = {
+        "level1": {"search_arxiv", "summarize_chunk", "append_to_file"},
+        "level2": {"search_papers", "get_and_summarize_paper", "append_to_review"},
+        "level3": {"conduct_literature_review"},
+    }
+    for level, names in required.items():
+        assert names <= {t.name for t in get_tools(level)}
+
+
+def test_level2_building_blocks_produce_a_passing_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    papers = _papers()
+    monkeypatch.setattr(reports, "search_arxiv", lambda *args, **kwargs: list(papers.values()))
+    monkeypatch.setattr(reports, "fetch_arxiv_papers", lambda ids, **kwargs: list(papers.values()))
+    settings = _settings(tmp_path)
+    cited = reports.search_cited_papers("demo topic", max_results=5, settings=settings)
+    assert cited[0].apa_citation.endswith("https://arxiv.org/abs/2401.00000")
+
+    reports.append_to_review("# Review: demo topic", settings=settings)
+    for number, paper in enumerate(cited, start=1):
+        reports.append_to_review(
+            f"## {number}. {paper.title}\n\n{paper.apa_citation}\n\n"
+            "This paper studies the topic and reports clear, reproducible results.",
+            settings=settings,
+        )
+    reports.append_bibliography([p.arxiv_id for p in cited], settings=settings)
+    score = evaluate_review(
+        tmp_path / "reviews" / "review.md",
+        scenario=SCENARIO,
+        expected_papers=5,
+        lookup=_lookup(papers),
+    )
+    assert score.success, [c for c in score.criteria if not c.passed]
+
+
+def test_split_keeps_only_leading_chunks(tmp_path: Path) -> None:
+    settings = _settings(tmp_path, chunk_size=500, pipeline_max_chunks=2)
+    text = tmp_path / "texts" / "doc.txt"
+    text.parent.mkdir()
+    text.write_text("word " * 1000, encoding="utf-8")
+    assert len(split_paper_text("texts/doc.txt", settings=settings)) == 2
+
+
+def test_context_overflow_is_a_scored_failure_not_an_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def overflow() -> None:
+        response = httpx2.Response(400, request=httpx2.Request("POST", "http://llm/v1"))
+        message = "Context size has been exceeded."
+        raise openai.BadRequestError(message, response=response, body=None)
+
+    _patch_agent(monkeypatch, overflow)
+    _, output = _run(tmp_path)
+    records = load_records(output)
+    assert {r.status for r in records} == {"failed"}
+    assert all(r.outcome and not r.outcome.success for r in records)
+    assert {r.run_id for r in records} == {"level1-demo-01", "level3-demo-01"}
+    # Failed runs are final: a second invocation does not repeat them.
+    assert _run(tmp_path)[0] == 0
+    [level1, _] = summarize(records)
+    assert (level1.runs, level1.failed_runs, level1.error_runs) == (1, 1, 0)
+    assert level1.success_rate == 0.0
+
+
+def test_resume_rejects_output_from_another_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_agent(monkeypatch, lambda: _write_review(get_settings().workspace_dir, _review_text()))
+    _, output = _run(tmp_path)
+    with pytest.raises(InvalidInputError, match="different configuration"):
+        run_evaluation(
+            scenarios=[SCENARIO],
+            levels=["level1"],
+            repeats=2,
+            output=output,
+            runs_dir=tmp_path / "runs",
+            settings=_settings(tmp_path / "unused", chunk_size=1000),
+            lookup=_lookup(_papers()),
+        )
+
+
+def test_repeatability_skips_scenarios_with_a_single_run() -> None:
+    records = [
+        _record("level1", "a", 1, score=1.0, tokens=100),
+        _record("level1", "b", 1, score=0.5, tokens=100),
+        _record("level1", "b", 2, score=0.0, tokens=100),
+    ]
+    [summary] = summarize(records)
+    assert summary.repeatability_score_std == pytest.approx(0.3536, abs=1e-3)

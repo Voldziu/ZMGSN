@@ -12,13 +12,14 @@ from tool_eval.services.formatting import format_markdown_table
 
 
 class LevelSummary(BaseModel):
-    """Metrics of one tool level over all valid (non-`error`) runs."""
+    """Metrics of one tool level over all scored runs (everything except infrastructure `error`)."""
 
     model_config = ConfigDict(frozen=True)
 
     level: str
     runs: int
     error_runs: int
+    failed_runs: int
     step_limit_runs: int
     success_rate: float
     mean_score: float
@@ -88,6 +89,8 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
             f"{s.mean_tool_calls:.1f}",
             f"{s.mean_wall_seconds:.0f}",
             str(s.step_limit_runs),
+            str(s.failed_runs),
+            str(s.error_runs),
         ]
         for s in summaries
     ]
@@ -117,12 +120,15 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
                 "tool calls",
                 "wall s*",
                 "step limit",
+                "failed",
+                "errors",
             ],
             metric_rows,
         ),
         "*Wall time depends on network and arXiv throttling; treat it as indicative only.",
         "## Repeatability and consistency",
-        "Repeatability = mean over scenarios of the spread across repeats. "
+        "Repeatability = mean over scenarios of the spread across repeats "
+        "(scenarios with fewer than two scored runs are skipped). "
         "Consistency = spread of per-scenario means across scenarios. "
         "`std` is of the score, `cv` is the coefficient of variation of total tokens. "
         "Lower is more stable.",
@@ -139,9 +145,20 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
         "## Per scenario (success rate / mean tokens)",
         format_markdown_table(["scenario", *levels], _scenario_rows(records, levels)),
     ]
-    failed = [r for r in records if r.status == "error"]
+    configs = {r.config_sha256 for r in records if r.status != "error"}
+    if len(configs) > 1:
+        sections.insert(
+            1,
+            f"**Warning:** records come from {len(configs)} different configurations; "
+            "levels are not comparable.",
+        )
+    failed = [r for r in records if r.status == "failed"]
     if failed:
         lines = "\n".join(f"- `{r.run_id}`: {r.error}" for r in failed)
+        sections += ["## Runs that failed inside the agent (scored as failures)", lines]
+    errors = [r for r in records if r.status == "error"]
+    if errors:
+        lines = "\n".join(f"- `{r.run_id}`: {r.error}" for r in errors)
         sections += [
             "## Runs with infrastructure errors (excluded from all metrics)",
             lines,
@@ -163,6 +180,7 @@ def _summarize_level(level: str, items: Sequence[RunRecord]) -> LevelSummary:
         level=level,
         runs=len(valid),
         error_runs=len(items) - len(valid),
+        failed_runs=sum(r.status == "failed" for r in valid),
         step_limit_runs=sum(r.status == "step_limit" for r in valid),
         success_rate=_mean([float(_success(r)) for r in valid]),
         mean_score=_mean([_score(r) for r in valid]),
@@ -173,8 +191,8 @@ def _summarize_level(level: str, items: Sequence[RunRecord]) -> LevelSummary:
         mean_llm_calls=_mean([float(r.cost.llm_calls) for r in valid]),
         mean_tool_calls=_mean([float(r.cost.tool_calls) for r in valid]),
         mean_wall_seconds=_mean([r.cost.wall_seconds for r in valid]),
-        repeatability_score_std=_mean([_std(group) for group in scenario_scores]),
-        repeatability_tokens_cv=_mean([_cv(group) for group in scenario_tokens]),
+        repeatability_score_std=_mean([_std(g) for g in scenario_scores if len(g) >= 2]),
+        repeatability_tokens_cv=_mean([_cv(g) for g in scenario_tokens if len(g) >= 2]),
         consistency_score_std=_std([_mean(group) for group in scenario_scores]),
         consistency_tokens_cv=_cv([_mean(group) for group in scenario_tokens]),
     )

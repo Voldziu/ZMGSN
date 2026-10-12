@@ -5,7 +5,8 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-RunStatus = Literal["completed", "step_limit", "error"]
+# `failed`: agent broke the run (e.g. context overflow), scored; `error`: infrastructure, retried.
+RunStatus = Literal["completed", "step_limit", "failed", "error"]
 
 
 class Scenario(BaseModel):
@@ -114,6 +115,12 @@ class RunRecord(BaseModel):
     prompt_version: str
     system_prompt_sha256: str
     task_prompt_sha256: str
+    review_paper_count: int | None = None
+    chunk_size: int | None = None
+    text_max_chars: int | None = None
+    pipeline_max_chunks: int | None = None
+    # Hash of the settings above that change results; differing hashes are not comparable.
+    config_sha256: str = ""
     date_from: date
     date_to: date
     started_at: datetime

@@ -87,6 +87,9 @@ def extract_paper_text(pdf_ref: str, *, settings: Settings) -> str:
 def split_paper_text(text_ref: str, *, settings: Settings) -> list[str]:
     """Split a text file into chunk files under `chunks/<name>/`.
 
+    Only the first `pipeline_max_chunks` chunks are written, so every tool level works from
+    the same material.
+
     Args:
         text_ref: Workspace-relative path of the text file.
         settings: Application settings.
@@ -94,6 +97,10 @@ def split_paper_text(text_ref: str, *, settings: Settings) -> list[str]:
     Returns:
         Workspace-relative paths of the chunk files, in order.
     """
+    return _split_paper_text(text_ref, settings=settings)[0]
+
+
+def _split_paper_text(text_ref: str, *, settings: Settings) -> tuple[list[str], int]:
     workspace = settings.workspace_dir
     source = resolve_in_workspace(text_ref, workspace=workspace)
     chunks = split_text(
@@ -101,11 +108,11 @@ def split_paper_text(text_ref: str, *, settings: Settings) -> list[str]:
         chunk_size=settings.chunk_size,
     )
     refs: list[str] = []
-    for number, chunk in enumerate(chunks, start=1):
+    for number, chunk in enumerate(chunks[: settings.pipeline_max_chunks], start=1):
         dest = resolve_in_workspace(f"chunks/{source.stem}/{number:04d}.txt", workspace=workspace)
         write_text(dest, chunk, max_bytes=settings.max_file_bytes)
         refs.append(to_ref(dest, workspace=workspace))
-    return refs
+    return refs, len(chunks)
 
 
 def summarize_chunk_file(chunk_ref: str, *, settings: Settings, llm: BaseChatModel) -> str:
@@ -212,9 +219,11 @@ def summarize_paper(arxiv_id: str, *, settings: Settings, llm: BaseChatModel) ->
     """
     cleaned = validate_arxiv_id(arxiv_id)
     pdf_ref = download_paper_pdf(cleaned, settings=settings)
-    chunk_refs = split_paper_text(extract_paper_text(pdf_ref, settings=settings), settings=settings)
-    selected = chunk_refs[: settings.pipeline_max_chunks]
-    parts = [summarize_chunk_file(ref, settings=settings, llm=llm) for ref in selected]
+    chunk_refs, total = _split_paper_text(
+        extract_paper_text(pdf_ref, settings=settings),
+        settings=settings,
+    )
+    parts = [summarize_chunk_file(ref, settings=settings, llm=llm) for ref in chunk_refs]
     summary = "\n\n".join(parts)
     dest = resolve_in_workspace(
         f"summaries/{_safe_stem(cleaned)}.md",
@@ -225,8 +234,8 @@ def summarize_paper(arxiv_id: str, *, settings: Settings, llm: BaseChatModel) ->
         arxiv_id=cleaned,
         summary_path=to_ref(dest, workspace=settings.workspace_dir),
         summary=summary,
-        chunks_summarized=len(selected),
-        chunks_total=len(chunk_refs),
+        chunks_summarized=len(chunk_refs),
+        chunks_total=total,
     )
 
 
