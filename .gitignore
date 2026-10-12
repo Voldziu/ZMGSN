@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+
+# MISC
+.DS_Store
+results/
+
+# Agentic
+
+.vibe-wise/
+workspace

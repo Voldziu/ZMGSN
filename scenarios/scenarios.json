@@ -1,0 +1,12 @@
+[
+  {"id": "rag-2024h1", "topic": "retrieval augmented generation", "date_from": "2024-01-01", "date_to": "2024-06-30"},
+  {"id": "gnn-2023h1", "topic": "graph neural networks", "date_from": "2023-01-01", "date_to": "2023-06-30"},
+  {"id": "diffusion-2023h2", "topic": "diffusion models image generation", "date_from": "2023-07-01", "date_to": "2023-12-31"},
+  {"id": "rlhf-2024", "topic": "reinforcement learning from human feedback", "date_from": "2024-01-01", "date_to": "2024-12-31"},
+  {"id": "federated-2022", "topic": "federated learning privacy", "date_from": "2022-01-01", "date_to": "2022-12-31"},
+  {"id": "qec-2023", "topic": "quantum error correction", "date_from": "2023-01-01", "date_to": "2023-12-31"},
+  {"id": "protein-2022h2", "topic": "protein structure prediction", "date_from": "2022-07-01", "date_to": "2023-06-30"},
+  {"id": "timeseries-2023", "topic": "time series forecasting transformers", "date_from": "2023-01-01", "date_to": "2023-12-31"},
+  {"id": "hallucination-2024", "topic": "large language model hallucination", "date_from": "2024-01-01", "date_to": "2024-12-31"},
+  {"id": "xai-2022", "topic": "explainable artificial intelligence", "date_from": "2022-01-01", "date_to": "2022-12-31"}
+]

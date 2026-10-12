@@ -1,0 +1,50 @@
+[project]
+name = "tool_eval"
+version = "0.1.0"
+description = "Research on how tool granularity affects an LLM research-assistant agent."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "defusedxml>=0.7.1",
+    "httpx>=0.28.1",
+    "langchain>=1.4.4",
+    "langchain-openai>=1.7.0",
+    "pydantic-settings>=2.15.0",
+    "pypdf>=6.20.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tool_eval"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "D", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+    "types-defusedxml>=0.7.0.20260504",
+]
