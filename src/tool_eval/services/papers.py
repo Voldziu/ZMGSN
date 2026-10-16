@@ -1,6 +1,5 @@
 """Workspace-based paper operations. Level 1 tools call them one by one; levels 2-3 chain them."""
 
-import logging
 import shutil
 
 from langchain_core.language_models import BaseChatModel
@@ -12,10 +11,11 @@ from tool_eval.prompts import load_prompt
 from tool_eval.services import llm_ops
 from tool_eval.services.arxiv import validate_arxiv_id
 from tool_eval.services.pdf import download_arxiv_pdf, extract_pdf_text
+from tool_eval.utils.logger import get_logger
 from tool_eval.utils.paths import resolve_in_workspace, to_ref
 from tool_eval.utils.text import read_text, split_text, write_text
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class PaperSummary(BaseModel):

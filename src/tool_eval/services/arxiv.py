@@ -1,6 +1,5 @@
 """arXiv search and metadata lookup via the public Atom API."""
 
-import logging
 import re
 import threading
 import time
@@ -14,8 +13,9 @@ from pydantic import BaseModel, ConfigDict
 
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.services.http import build_client
+from tool_eval.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _API_URL = "https://export.arxiv.org/api/query"
 _ATOM = "{http://www.w3.org/2005/Atom}"

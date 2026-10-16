@@ -1,6 +1,5 @@
 """Report generation: bibliographies and end-to-end literature reviews."""
 
-import logging
 from collections.abc import Sequence
 from datetime import date
 
@@ -12,10 +11,11 @@ from tool_eval.exceptions import ExternalServiceError, InvalidInputError, ToolEv
 from tool_eval.services.arxiv import ArxivPaper, fetch_arxiv_papers, search_arxiv
 from tool_eval.services.formatting import format_apa_citation
 from tool_eval.services.papers import summarize_paper
+from tool_eval.utils.logger import get_logger
 from tool_eval.utils.paths import require_text_suffix, resolve_in_workspace, to_ref
 from tool_eval.utils.text import append_text, write_text
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Fixed so every tool level and the evaluation checks agree on where the review lives.
 REVIEW_PATH = "reviews/review.md"

@@ -1,6 +1,6 @@
 """Agent construction: a tool-calling ReAct-style loop built with LangChain's `create_agent`."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from langchain.agents import create_agent
@@ -44,6 +44,9 @@ def run_task(
     *,
     max_steps: int,
     callbacks: Sequence[BaseCallbackHandler] = (),
+    run_name: str | None = None,
+    tags: Sequence[str] = (),
+    metadata: Mapping[str, str | int | float] | None = None,
 ) -> list[AnyMessage]:
     """Run the agent on one task and return the full message history.
 
@@ -52,6 +55,9 @@ def run_task(
         task: The user's request.
         max_steps: Maximum number of model calls.
         callbacks: Handlers that observe every model and tool call, including nested ones.
+        run_name: Name of the trace in LangSmith when tracing is enabled.
+        tags: Trace tags for filtering.
+        metadata: Trace metadata, for example level and scenario.
 
     Returns:
         All messages of the run, including tool calls and results.
@@ -60,7 +66,14 @@ def run_task(
         GraphRecursionError: If the agent does not finish within `max_steps`.
     """
     # Each step is one model call plus one tool execution, so allow two graph steps per step.
-    config: RunnableConfig = {"recursion_limit": 2 * max_steps + 1, "callbacks": list(callbacks)}
+    config: RunnableConfig = {
+        "recursion_limit": 2 * max_steps + 1,
+        "callbacks": list(callbacks),
+        "tags": list(tags),
+        "metadata": dict(metadata or {}),
+    }
+    if run_name:
+        config["run_name"] = run_name
     result = agent.invoke({"messages": [HumanMessage(task)]}, config=config)
     messages: list[AnyMessage] = result["messages"]
     return messages

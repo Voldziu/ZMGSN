@@ -1,14 +1,13 @@
 """Wikipedia search via the MediaWiki Action API."""
 
-import logging
-
 import httpx
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.services.http import build_client
+from tool_eval.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _API_URL = "https://en.wikipedia.org/w/api.php"
 

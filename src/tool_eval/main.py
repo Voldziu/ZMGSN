@@ -1,9 +1,10 @@
 """Command-line entry point: `run` executes the evaluation, `report` summarizes its results."""
 
 import argparse
-import logging
 from collections.abc import Sequence
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 from tool_eval.config import get_settings
 from tool_eval.evaluation.checks import ArxivLookup
@@ -12,8 +13,9 @@ from tool_eval.evaluation.runner import run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
 from tool_eval.exceptions import InvalidInputError
 from tool_eval.tools.registry import TOOLSETS
+from tool_eval.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_RESULTS = Path("results/results.jsonl")
 
@@ -27,8 +29,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         Process exit code.
     """
+    # LangSmith tracing is configured through LANGSMITH_* variables, which only exist in os.environ.
+    load_dotenv()
     args = _parser().parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
         if args.command == "run":
             return _run(args)

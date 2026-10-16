@@ -1,6 +1,5 @@
 """PDF download from arXiv and text extraction."""
 
-import logging
 from pathlib import Path
 
 import httpx
@@ -10,8 +9,9 @@ from pypdf.errors import PyPdfError
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.services.arxiv import validate_arxiv_id
 from tool_eval.services.http import build_client
+from tool_eval.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _PDF_URL = "https://arxiv.org/pdf/{arxiv_id}"
 

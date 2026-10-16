@@ -19,8 +19,11 @@ wheels/
 # MISC
 .DS_Store
 results/
+logs/
 
 # Agentic
 
 .vibe-wise/
 workspace
+
+.langgraph_api

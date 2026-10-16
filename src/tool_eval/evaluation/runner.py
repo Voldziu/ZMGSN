@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import logging
 import re
 import shutil
 from collections.abc import Sequence
@@ -20,8 +19,9 @@ from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scen
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.prompts import load_prompt
 from tool_eval.services.reports import REVIEW_PATH
+from tool_eval.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CONTEXT_OVERFLOW = re.compile(r"context[ _](?:size|length|window)", re.IGNORECASE)
 
@@ -142,7 +142,7 @@ def run_single(
             "pdf_cache_dir": settings.pdf_cache_dir or runs_dir.parent / "pdf_cache",
             "arxiv_date_from": scenario.date_from,
             "arxiv_date_to": scenario.date_to,
-        }
+        },
     )
     system_prompt = load_prompt("system", run_settings.prompt_version)
     task_prompt = load_prompt("evaluation", run_settings.prompt_version)
@@ -160,7 +160,15 @@ def run_single(
     with use_settings(run_settings):
         try:
             agent = build_agent(level, settings=run_settings)
-            run_task(agent, task, max_steps=run_settings.agent_max_steps, callbacks=[meter])
+            run_task(
+                agent,
+                task,
+                max_steps=run_settings.agent_max_steps,
+                callbacks=[meter],
+                run_name=run_id,
+                tags=[level, scenario.id],
+                metadata={"level": level, "scenario_id": scenario.id, "repeat": repeat},
+            )
         except GraphRecursionError:
             status = "step_limit"
         except Exception as exc:  # noqa: BLE001 - recorded, not hidden
