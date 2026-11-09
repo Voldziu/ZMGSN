@@ -6,7 +6,7 @@
 
 **Architecture:** Each preset is a `vllm serve --config` YAML file, one per platform (`presets/cuda/`, `presets/metal/`). Compose runs one profile per CUDA preset from an image built from the `llm` uv dependency group; macOS runs the Metal preset natively. The Python client only changes defaults and sends `max_tokens` plus a thinking toggle.
 
-**Tech Stack:** vLLM 0.33.0, `nvidia/cuda:13.0.2-devel-ubuntu24.04`, uv 0.13.7, Docker Compose, vllm-metal (Homebrew), langchain-openai, pydantic-settings, pytest, PyYAML (tests only).
+**Tech Stack:** vLLM 0.33.0, `nvidia/cuda:13.0.2-base-ubuntu24.04`, uv 0.13.7, Docker Compose, vllm-metal (Homebrew), langchain-openai, pydantic-settings, pytest, PyYAML (tests only).
 
 Spec: `docs/superpowers/specs/2026-11-09-vllm-server-design.md`.
 
@@ -15,7 +15,7 @@ Spec: `docs/superpowers/specs/2026-11-09-vllm-server-design.md`.
 - Preset names (= `served-model-name` = Compose profile = `LLM_MODEL`): `qwen`, `gemma`, `llama`, `qwen-mid`, `qwen-weak`.
 - Server port: `8000`; client default `LLM_BASE_URL=http://localhost:8000/v1`.
 - vLLM pinned to `0.33.0`; `llm` group marker: `sys_platform == 'linux' and python_version < '3.15'`.
-- Base image: `nvidia/cuda:13.0.2-devel-ubuntu24.04`; uv image `ghcr.io/astral-sh/uv:0.13.7`. Host NVIDIA driver ≥ 580.
+- Base image: `nvidia/cuda:13.0.2-base-ubuntu24.04`; uv image `ghcr.io/astral-sh/uv:0.13.7`. Host NVIDIA driver ≥ 580.
 - All presets: `max-model-len: 32768`, `enable-auto-tool-choice: true`.
 - CUDA budgets (16 GB card): `qwen`/`gemma`/`llama` 0.75, `qwen-mid` 0.375, `qwen-weak` 0.25.
 - `llm_max_tokens` default 4096; `llm_enable_thinking` default `false`, sent as `chat_template_kwargs.enable_thinking`.
@@ -450,7 +450,7 @@ Expected: FAIL — `FileNotFoundError` for `docker-compose.yml`.
 `src/tool_eval/server/Dockerfile`:
 
 ```dockerfile
-FROM nvidia/cuda:13.0.2-devel-ubuntu24.04
+FROM nvidia/cuda:13.0.2-base-ubuntu24.04
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /bin/
 

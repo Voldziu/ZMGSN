@@ -1,4 +1,9 @@
-FROM nvidia/cuda:13.0.2-devel-ubuntu24.04
+FROM nvidia/cuda:13.0.2-base-ubuntu24.04
+
+# Host compiler for nvcc / Triton JIT; the CUDA toolkit itself comes from torch's pip wheels.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /bin/
 
@@ -11,7 +16,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --only-group llm --no-install-project
-ENV PATH=/app/.venv/bin:$PATH
+ENV CUDA_HOME=/app/.venv/lib/python3.12/site-packages/nvidia/cu13
+ENV PATH=/app/.venv/bin:$CUDA_HOME/bin:$PATH
 
 COPY src/tool_eval/server/templates /app/templates
 COPY src/tool_eval/server/presets/cuda /app/presets/cuda

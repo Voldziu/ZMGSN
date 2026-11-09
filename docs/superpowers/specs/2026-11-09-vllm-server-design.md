@@ -20,7 +20,7 @@ tool parsers, so the Python client is platform-agnostic.
 | Model switching (NVIDIA) | One Compose service per preset with its own profile (`docker compose --profile qwen up`), `command: [--config, /app/presets/cuda/<name>.yaml]` |
 | Model switching (macOS) | `vllm serve --config src/tool_eval/server/presets/metal/<name>.yaml` from the repo root |
 | Compose location | Repo root; build context `.`, Dockerfile in `src/tool_eval/server/` |
-| Base image | `nvidia/cuda:13.0.2-devel-ubuntu24.04` + uv; vLLM 0.33.0 installed from the `llm` dependency group (its PyPI torch 2.14.0 is built for CUDA 13.0; host driver ≥ 580) |
+| Base image | `nvidia/cuda:13.0.2-base-ubuntu24.04` + uv; vLLM 0.33.0 installed from the `llm` dependency group (its PyPI torch 2.14.0 is built for CUDA 13.0; host driver ≥ 580) |
 | macOS install | `brew tap vllm-project/vllm-metal https://github.com/vllm-project/vllm-metal && brew install vllm-project/vllm-metal/vllm-metal` |
 | Weights | Docker: bind mount `${HF_CACHE_DIR:-~/.cache/huggingface}` → `/root/.cache/huggingface`; macOS uses the same host cache natively; `HF_TOKEN` from `.env` |
 | Model on the client | Explicit `LLM_MODEL` in `.env`, equal to the preset's `served-model-name` (same on both platforms) |
@@ -85,7 +85,7 @@ Notes:
 
 ### `src/tool_eval/server/Dockerfile`
 
-- `FROM nvidia/cuda:13.0.2-devel-ubuntu24.04` (devel keeps `nvcc` for any FlashInfer JIT on `sm_120`).
+- `FROM nvidia/cuda:13.0.2-base-ubuntu24.04` (nvcc and CUDA headers come from torch's pip `nvidia/cu13`; `CUDA_HOME` points there, `g++` from apt).
 - uv 0.13.7 copied from `ghcr.io/astral-sh/uv`, Python 3.12 installed by uv.
 - `COPY pyproject.toml uv.lock` → `uv sync --frozen --only-group llm --no-install-project`, then
   `vllm download-kernels` (precompiled FlashInfer kernels, avoids minutes of JIT on Blackwell).
