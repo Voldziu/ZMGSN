@@ -12,8 +12,6 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --only-group llm --no-install-project
 ENV PATH=/app/.venv/bin:$PATH
-# Precompiled FlashInfer kernels; otherwise Blackwell JIT-compiles them on every cold start.
-RUN vllm download-kernels
 
 COPY src/tool_eval/server/templates /app/templates
 COPY src/tool_eval/server/presets/cuda /app/presets/cuda

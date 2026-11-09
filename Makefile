@@ -35,6 +35,7 @@ mac-serve: ## 2. Start the server in the foreground (Ctrl-C stops it)
 
 ##@ Linux / Windows (NVIDIA GPU, Docker Compose, driver >= 580) — steps 1-2, then "Check"
 docker-up: ## 1. Build the image and start the preset in the background
+	@if [ "$$(uname)" = Darwin ]; then echo "Docker has no GPU on macOS; use: make mac-serve PRESET=$(PRESET)"; exit 1; fi
 	docker compose --profile $(PRESET) up -d --build
 
 docker-status: ## 2. Wait until STATUS shows "healthy" (first run downloads weights)
