@@ -1,6 +1,6 @@
 model: google/gemma-4-12B-it-qat-w4a16-ct
 served-model-name: gemma
-max-model-len: 16384
+max-model-len: 32768
 gpu-memory-utilization: 0.75
 enable-auto-tool-choice: true
 tool-call-parser: gemma4

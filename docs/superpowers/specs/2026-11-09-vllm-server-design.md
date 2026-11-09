@@ -29,7 +29,7 @@ tool parsers, so the Python client is platform-agnostic.
 
 ## Presets
 
-Every preset file sets `model`, `served-model-name`, `max-model-len: 16384`,
+Every preset file sets `model`, `served-model-name`, `max-model-len: 32768`,
 `enable-auto-tool-choice: true`, `tool-call-parser` and, where applicable, `reasoning-parser` and
 `chat-template`. Host and port come from the caller (Dockerfile entrypoint / README command).
 

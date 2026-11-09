@@ -1,6 +1,6 @@
 model: mlx-community/Qwen3.5-9B-MLX-4bit
 served-model-name: qwen
-max-model-len: 16384
+max-model-len: 32768
 enable-auto-tool-choice: true
 tool-call-parser: qwen3_coder
 reasoning-parser: qwen3

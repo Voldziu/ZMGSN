@@ -9,7 +9,8 @@ ENV UV_PYTHON=3.12 \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --only-group llm --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --only-group llm --no-install-project
 ENV PATH=/app/.venv/bin:$PATH
 # Precompiled FlashInfer kernels; otherwise Blackwell JIT-compiles them on every cold start.
 RUN vllm download-kernels

@@ -1,6 +1,6 @@
 model: mlx-community/gemma-4-12B-it-4bit
 served-model-name: gemma
-max-model-len: 16384
+max-model-len: 32768
 enable-auto-tool-choice: true
 tool-call-parser: gemma4
 reasoning-parser: gemma4

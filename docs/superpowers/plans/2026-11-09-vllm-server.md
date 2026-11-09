@@ -16,7 +16,7 @@ Spec: `docs/superpowers/specs/2026-11-09-vllm-server-design.md`.
 - Server port: `8000`; client default `LLM_BASE_URL=http://localhost:8000/v1`.
 - vLLM pinned to `0.33.0`; `llm` group marker: `sys_platform == 'linux' and python_version < '3.15'`.
 - Base image: `nvidia/cuda:13.0.2-devel-ubuntu24.04`; uv image `ghcr.io/astral-sh/uv:0.13.7`. Host NVIDIA driver ≥ 580.
-- All presets: `max-model-len: 16384`, `enable-auto-tool-choice: true`.
+- All presets: `max-model-len: 32768`, `enable-auto-tool-choice: true`.
 - CUDA budgets (16 GB card): `qwen`/`gemma`/`llama` 0.75, `qwen-mid` 0.375, `qwen-weak` 0.25.
 - `llm_max_tokens` default 4096; `llm_enable_thinking` default `false`, sent as `chat_template_kwargs.enable_thinking`.
 - Evaluation CLI sampling unchanged (`--temperature` 0.7, 10 repeats).
@@ -201,7 +201,7 @@ def test_platform_defines_all_presets(platform: str) -> None:
     for name, preset in presets.items():
         assert preset["served-model-name"] == name
         assert preset["enable-auto-tool-choice"] is True
-        assert preset["max-model-len"] == 16384
+        assert preset["max-model-len"] == 32768
 
 
 def test_platforms_share_parsers_and_templates() -> None:
@@ -241,7 +241,7 @@ Expected: both files non-empty; Gemma starts with `{%- macro format_parameters`,
 ```yaml
 model: cyankiwi/Qwen3.5-9B-AWQ-4bit
 served-model-name: qwen
-max-model-len: 16384
+max-model-len: 32768
 gpu-memory-utilization: 0.75
 enable-auto-tool-choice: true
 tool-call-parser: qwen3_coder
@@ -254,7 +254,7 @@ language-model-only: true
 ```yaml
 model: google/gemma-4-12B-it-qat-w4a16-ct
 served-model-name: gemma
-max-model-len: 16384
+max-model-len: 32768
 gpu-memory-utilization: 0.75
 enable-auto-tool-choice: true
 tool-call-parser: gemma4
@@ -268,7 +268,7 @@ limit-mm-per-prompt: '{"image": 0, "audio": 0}'
 ```yaml
 model: hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4
 served-model-name: llama
-max-model-len: 16384
+max-model-len: 32768
 gpu-memory-utilization: 0.75
 enable-auto-tool-choice: true
 tool-call-parser: llama3_json
@@ -280,7 +280,7 @@ chat-template: /app/templates/tool_chat_template_llama3.1_json.jinja
 ```yaml
 model: Qwen/Qwen3.5-4B
 served-model-name: qwen-mid
-max-model-len: 16384
+max-model-len: 32768
 gpu-memory-utilization: 0.375
 quantization: fp8
 enable-auto-tool-choice: true
@@ -294,7 +294,7 @@ language-model-only: true
 ```yaml
 model: Qwen/Qwen3.5-0.8B
 served-model-name: qwen-weak
-max-model-len: 16384
+max-model-len: 32768
 gpu-memory-utilization: 0.25
 enable-auto-tool-choice: true
 tool-call-parser: qwen3_coder
@@ -309,7 +309,7 @@ language-model-only: true
 ```yaml
 model: mlx-community/Qwen3.5-9B-MLX-4bit
 served-model-name: qwen
-max-model-len: 16384
+max-model-len: 32768
 enable-auto-tool-choice: true
 tool-call-parser: qwen3_coder
 reasoning-parser: qwen3
@@ -320,7 +320,7 @@ reasoning-parser: qwen3
 ```yaml
 model: mlx-community/gemma-4-12B-it-4bit
 served-model-name: gemma
-max-model-len: 16384
+max-model-len: 32768
 enable-auto-tool-choice: true
 tool-call-parser: gemma4
 reasoning-parser: gemma4
@@ -332,7 +332,7 @@ chat-template: src/tool_eval/server/templates/tool_chat_template_gemma4.jinja
 ```yaml
 model: mlx-community/Meta-Llama-3.1-8B-Instruct-4bit
 served-model-name: llama
-max-model-len: 16384
+max-model-len: 32768
 enable-auto-tool-choice: true
 tool-call-parser: llama3_json
 chat-template: src/tool_eval/server/templates/tool_chat_template_llama3.1_json.jinja
@@ -343,7 +343,7 @@ chat-template: src/tool_eval/server/templates/tool_chat_template_llama3.1_json.j
 ```yaml
 model: mlx-community/Qwen3.5-4B-MLX-4bit
 served-model-name: qwen-mid
-max-model-len: 16384
+max-model-len: 32768
 enable-auto-tool-choice: true
 tool-call-parser: qwen3_coder
 reasoning-parser: qwen3
@@ -354,7 +354,7 @@ reasoning-parser: qwen3
 ```yaml
 model: mlx-community/Qwen3.5-0.8B-MLX-bf16
 served-model-name: qwen-weak
-max-model-len: 16384
+max-model-len: 32768
 enable-auto-tool-choice: true
 tool-call-parser: qwen3_coder
 reasoning-parser: qwen3

@@ -1,6 +1,6 @@
 model: hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4
 served-model-name: llama
-max-model-len: 16384
+max-model-len: 32768
 gpu-memory-utilization: 0.75
 enable-auto-tool-choice: true
 tool-call-parser: llama3_json

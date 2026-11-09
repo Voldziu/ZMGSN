@@ -17,6 +17,7 @@ NVIDIA GPU — Linux, or Windows with Docker Desktop (WSL 2 backend); driver ≥
 
 ```sh
 docker compose --profile qwen up -d --build
+docker compose --profile qwen down   # before starting another preset (all use port 8000)
 ```
 
 macOS (Apple Silicon, GPU via vllm-metal; Docker on macOS has no GPU access):

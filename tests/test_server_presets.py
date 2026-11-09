@@ -26,7 +26,7 @@ def test_platform_defines_all_presets(platform: str) -> None:
     for name, preset in presets.items():
         assert preset["served-model-name"] == name
         assert preset["enable-auto-tool-choice"] is True
-        assert preset["max-model-len"] == 16384
+        assert preset["max-model-len"] == 32768
 
 
 def test_platforms_share_parsers_and_templates() -> None:
@@ -38,6 +38,8 @@ def test_platforms_share_parsers_and_templates() -> None:
         metal_template = metal[name].get("chat-template")
         assert (cuda_template is None) == (metal_template is None), name
         if cuda_template and metal_template:
+            assert cuda_template.startswith("/app/templates/"), name
+            assert (SERVER_DIR.parents[2] / metal_template).is_file(), name
             assert Path(cuda_template).name == Path(metal_template).name
             assert (SERVER_DIR / "templates" / Path(cuda_template).name).is_file()
 
