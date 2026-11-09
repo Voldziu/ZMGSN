@@ -20,12 +20,12 @@ tool parsers, so the Python client is platform-agnostic.
 | Model switching (NVIDIA) | One Compose service per preset with its own profile (`docker compose --profile qwen up`), `command: [--config, /app/presets/cuda/<name>.yaml]` |
 | Model switching (macOS) | `vllm serve --config src/tool_eval/server/presets/metal/<name>.yaml` from the repo root |
 | Compose location | Repo root; build context `.`, Dockerfile in `src/tool_eval/server/` |
-| Base image | `nvidia/cuda:12.9.x-devel-ubuntu24.04` + uv; vLLM installed from the `llm` dependency group |
+| Base image | `nvidia/cuda:13.0.2-devel-ubuntu24.04` + uv; vLLM 0.33.0 installed from the `llm` dependency group (its PyPI torch 2.14.0 is built for CUDA 13.0; host driver ≥ 580) |
 | macOS install | `brew tap vllm-project/vllm-metal https://github.com/vllm-project/vllm-metal && brew install vllm-project/vllm-metal/vllm-metal` |
 | Weights | Docker: bind mount `${HF_CACHE_DIR:-~/.cache/huggingface}` → `/root/.cache/huggingface`; macOS uses the same host cache natively; `HF_TOKEN` from `.env` |
 | Model on the client | Explicit `LLM_MODEL` in `.env`, equal to the preset's `served-model-name` (same on both platforms) |
 | Thinking mode | `LLM_ENABLE_THINKING` setting, default `false`, sent per request as `chat_template_kwargs` |
-| Agent controls | Aligned to MCP-GRANITE (arXiv:2609.24161): temperature 0.0, max 10 steps, `max_tokens` 4096 |
+| Agent controls | `max_tokens` 4096 as in MCP-GRANITE (arXiv:2609.24161). Evaluation keeps its own sampling (CLI `--temperature` 0.7, 10 repeats) to measure variance; `AGENT_TEMPERATURE=0` and 10 max steps stay for single runs |
 
 ## Presets
 
@@ -71,21 +71,24 @@ Notes:
 - CUDA and Metal presets use different 4-bit formats (AWQ/W4A16 vs MLX) of the same models. Mac
   results are for development; thesis comparisons use the RTX runs.
 - In `vllm-metal`, Qwen3.5, Llama 3 and Gemma 4 (text path) are listed as supported.
+- The Llama 3.1 tool template raises on more than one tool call per assistant message; manual
+  verification checks whether the agent ever emits parallel calls with the `llama` preset.
 
 ## Components
 
 ### `pyproject.toml` — `llm` dependency group
 
-- `vllm==<pinned>` with marker `sys_platform == 'linux'` so `uv lock`/`uv sync` keep working on macOS.
-- `torch` resolved from the PyTorch CUDA index matching vLLM's wheels (cu129) via `[[tool.uv.index]]`
-  (explicit) + `[tool.uv.sources]`, also Linux-only.
+- `vllm==0.33.0` with marker `sys_platform == 'linux' and python_version < '3.15'` so `uv lock`/`uv sync`
+  keep working on macOS and the universal lock stays solvable (vLLM supports Python < 3.15).
+- No custom torch index: vLLM 0.33.0 pins `torch==2.14.0`, whose PyPI Linux wheels bundle CUDA 13.0.
 - Not part of default groups; `uv sync` on macOS installs nothing from it.
 
 ### `src/tool_eval/server/Dockerfile`
 
-- `FROM nvidia/cuda:12.9.x-devel-ubuntu24.04` (devel: `nvcc` needed for FlashInfer JIT on `sm_120`).
-- uv copied from `ghcr.io/astral-sh/uv`, Python 3.12 installed by uv.
-- `COPY pyproject.toml uv.lock` → `uv sync --frozen --only-group llm --no-install-project`.
+- `FROM nvidia/cuda:13.0.2-devel-ubuntu24.04` (devel keeps `nvcc` for any FlashInfer JIT on `sm_120`).
+- uv 0.13.7 copied from `ghcr.io/astral-sh/uv`, Python 3.12 installed by uv.
+- `COPY pyproject.toml uv.lock` → `uv sync --frozen --only-group llm --no-install-project`, then
+  `vllm download-kernels` (precompiled FlashInfer kernels, avoids minutes of JIT on Blackwell).
 - `COPY src/tool_eval/server/templates /app/templates` and
   `COPY src/tool_eval/server/presets/cuda /app/presets/cuda`.
 - `ENTRYPOINT ["vllm", "serve", "--host", "0.0.0.0", "--port", "8000"]`.
@@ -135,6 +138,9 @@ Build context is the repo root: exclude `.venv`, `workspace/`, `logs/`, `results
 ## Testing
 
 - Unit: `build_chat_model` passes `max_tokens` and the `enable_thinking` flag; settings defaults.
+- Unit: preset consistency — `cuda/` and `metal/` define the same presets, `served-model-name`
+  equals the file stem, parsers and template names match across platforms, referenced templates
+  exist, and every Compose service points at its CUDA preset.
 - Rename the "LM Studio unreachable" test message.
 - Static: `docker compose config` for every profile; `uv lock` succeeds on macOS.
 - Manual on macOS: at least `qwen-weak` via `vllm-metal` serves `/v1/models` with the served name
