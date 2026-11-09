@@ -24,8 +24,12 @@ macOS (Apple Silicon, GPU via vllm-metal; Docker on macOS has no GPU access):
 ```sh
 brew tap vllm-project/vllm-metal https://github.com/vllm-project/vllm-metal
 brew install vllm-project/vllm-metal/vllm-metal
-vllm serve --config src/tool_eval/server/presets/metal/qwen.yaml   # run from the repo root
+# without a current Xcode: curl -fsSL https://raw.githubusercontent.com/vllm-project/vllm-metal/main/install.sh | bash
+#                          (installs into ~/.venv-vllm-metal; use ~/.venv-vllm-metal/bin/vllm)
+GLOO_SOCKET_IFNAME=lo0 vllm serve --config src/tool_eval/server/presets/metal/qwen.yaml   # from the repo root
 ```
+
+`GLOO_SOCKET_IFNAME=lo0` avoids a long startup stall when macOS cannot resolve the local hostname.
 
 Gated models need `HF_TOKEN` (in `.env` for Docker, exported in the shell for macOS). Mac presets use MLX 4-bit weights, so their results are not directly comparable with the CUDA runs.
 
