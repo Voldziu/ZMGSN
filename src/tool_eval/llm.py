@@ -1,4 +1,4 @@
-"""Construction of the chat model that talks to LM Studio (OpenAI-compatible API)."""
+"""Construction of the chat model that talks to the vLLM server (OpenAI-compatible API)."""
 
 from langchain_openai import ChatOpenAI
 
@@ -19,6 +19,9 @@ def build_chat_model(settings: Settings) -> ChatOpenAI:
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         temperature=settings.agent_temperature,
+        max_completion_tokens=settings.llm_max_tokens,
+        # Read by the Qwen3.5 / Gemma 4 chat templates; ignored by templates without thinking.
+        extra_body={"chat_template_kwargs": {"enable_thinking": settings.llm_enable_thinking}},
     )
 
 

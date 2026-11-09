@@ -22,9 +22,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    llm_base_url: str = "http://localhost:1234/v1"
-    llm_api_key: SecretStr = SecretStr("lm-studio")
-    llm_model: str = "local-model"
+    llm_base_url: str = "http://localhost:8000/v1"
+    llm_api_key: SecretStr = SecretStr("EMPTY")
+    llm_model: str = "qwen"
+    llm_max_tokens: int = Field(default=4096, ge=1)
+    llm_enable_thinking: bool = False
 
     agent_max_steps: int = Field(default=10, ge=1)
     agent_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
