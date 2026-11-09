@@ -9,7 +9,25 @@ uv sync
 cp .env.example .env
 ```
 
-Start the LM Studio local server (default `http://localhost:1234/v1`), load a model and set `LLM_MODEL` in `.env`.
+## Model server
+
+Presets (set `LLM_MODEL` in `.env` to the preset name): `qwen`, `gemma`, `llama` (≤ 12 GB VRAM), `qwen-mid` (~6 GB), `qwen-weak` (~4 GB). Definitions: `src/tool_eval/server/presets/{cuda,metal}/`. Both paths serve `http://localhost:8000/v1`.
+
+NVIDIA GPU — Linux, or Windows with Docker Desktop (WSL 2 backend); driver ≥ 580:
+
+```sh
+docker compose --profile qwen up -d --build
+```
+
+macOS (Apple Silicon, GPU via vllm-metal; Docker on macOS has no GPU access):
+
+```sh
+brew tap vllm-project/vllm-metal https://github.com/vllm-project/vllm-metal
+brew install vllm-project/vllm-metal/vllm-metal
+vllm serve --config src/tool_eval/server/presets/metal/qwen.yaml   # run from the repo root
+```
+
+Gated models need `HF_TOKEN` (in `.env` for Docker, exported in the shell for macOS). Mac presets use MLX 4-bit weights, so their results are not directly comparable with the CUDA runs.
 
 ## Evaluate
 

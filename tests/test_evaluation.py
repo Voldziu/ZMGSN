@@ -328,11 +328,11 @@ def test_runner_maps_step_limit_and_infrastructure_errors(
     assert {r.status for r in limited} == {"step_limit"}
     assert all(r.outcome and not r.outcome.success for r in limited)
 
-    def lm_down() -> None:
-        raise ConnectionError("LM Studio unreachable")
+    def server_down() -> None:
+        raise ConnectionError("vLLM server unreachable")
 
     error_output = tmp_path / "errors.jsonl"
-    _patch_agent(monkeypatch, lm_down)
+    _patch_agent(monkeypatch, server_down)
     run_evaluation(
         scenarios=[SCENARIO],
         levels=["level1"],
