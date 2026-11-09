@@ -60,9 +60,11 @@ tool-check: ## 4. Send one tool-calling request (expect tool_calls with get_weat
 		"chat_template_kwargs": {"enable_thinking": false}}' \
 	| python3 -c "import json, sys; m = json.load(sys.stdin)['choices'][0]['message']; print('tool_calls:', m.get('tool_calls')); print('content:', m.get('content'))"
 
-eval-smoke: ## 5. One evaluation run against the server
+eval-smoke: ## 5. One evaluation run against the server (writes results/smoke-<preset>.jsonl)
+	rm -rf results/smoke-$(PRESET).jsonl workspace/smoke-runs
 	LLM_BASE_URL=$(API) LLM_MODEL=$(PRESET) uv run python -m tool_eval.main run \
-		--only rag-2024h1 --levels level1 --repeats 1
+		--only rag-2024h1 --levels level1 --repeats 1 \
+		--output results/smoke-$(PRESET).jsonl --runs-dir workspace/smoke-runs
 
 test: ## Unit tests, lint, types (no server needed)
 	uv run pytest -q && uv run ruff check . && uv run mypy src tests
