@@ -1,0 +1,9 @@
+model: google/gemma-4-12B-it-qat-w4a16-ct
+served-model-name: gemma
+max-model-len: 16384
+gpu-memory-utilization: 0.75
+enable-auto-tool-choice: true
+tool-call-parser: gemma4
+reasoning-parser: gemma4
+chat-template: /app/templates/tool_chat_template_gemma4.jinja
+limit-mm-per-prompt: '{"image": 0, "audio": 0}'

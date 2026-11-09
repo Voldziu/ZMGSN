@@ -1,0 +1,8 @@
+model: cyankiwi/Qwen3.5-9B-AWQ-4bit
+served-model-name: qwen
+max-model-len: 16384
+gpu-memory-utilization: 0.75
+enable-auto-tool-choice: true
+tool-call-parser: qwen3_coder
+reasoning-parser: qwen3
+language-model-only: true

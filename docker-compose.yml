@@ -1,0 +1,48 @@
+x-vllm-base: &vllm-base
+  build:
+    context: .
+    dockerfile: src/tool_eval/server/Dockerfile
+  image: tool-eval-vllm:0.33.0
+  ports:
+    - "8000:8000"
+  ipc: host
+  environment:
+    HF_TOKEN: ${HF_TOKEN:-}
+  volumes:
+    - ${HF_CACHE_DIR:-~/.cache/huggingface}:/root/.cache/huggingface
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    # First start downloads weights.
+    start_period: 30m
+
+services:
+  qwen:
+    <<: *vllm-base
+    profiles: [qwen]
+    command: ["--config", "/app/presets/cuda/qwen.yaml"]
+  gemma:
+    <<: *vllm-base
+    profiles: [gemma]
+    command: ["--config", "/app/presets/cuda/gemma.yaml"]
+  llama:
+    <<: *vllm-base
+    profiles: [llama]
+    command: ["--config", "/app/presets/cuda/llama.yaml"]
+  qwen-mid:
+    <<: *vllm-base
+    profiles: [qwen-mid]
+    command: ["--config", "/app/presets/cuda/qwen-mid.yaml"]
+  qwen-weak:
+    <<: *vllm-base
+    profiles: [qwen-weak]
+    command: ["--config", "/app/presets/cuda/qwen-weak.yaml"]

@@ -1,0 +1,6 @@
+model: mlx-community/Meta-Llama-3.1-8B-Instruct-4bit
+served-model-name: llama
+max-model-len: 16384
+enable-auto-tool-choice: true
+tool-call-parser: llama3_json
+chat-template: src/tool_eval/server/templates/tool_chat_template_llama3.1_json.jinja

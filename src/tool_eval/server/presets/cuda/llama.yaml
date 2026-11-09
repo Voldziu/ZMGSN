@@ -1,0 +1,7 @@
+model: hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4
+served-model-name: llama
+max-model-len: 16384
+gpu-memory-utilization: 0.75
+enable-auto-tool-choice: true
+tool-call-parser: llama3_json
+chat-template: /app/templates/tool_chat_template_llama3.1_json.jinja
