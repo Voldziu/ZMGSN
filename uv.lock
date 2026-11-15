@@ -1,20 +1,20 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.14' and platform_machine == 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version == '3.13.*' and platform_machine == 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version < '3.13' and platform_machine == 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.14' and platform_machine == 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version == '3.13.*' and platform_machine == 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version < '3.13' and platform_machine == 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
+    "python_full_version >= '3.14' and platform_machine == 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version >= '3.14' and platform_machine == 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version == '3.13.*' and platform_machine == 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version == '3.13.*' and platform_machine == 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version < '3.13' and platform_machine == 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version < '3.13' and platform_machine == 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform == 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
+    "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version < '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "extra != 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
 ]
@@ -223,8 +223,8 @@ dependencies = [
     { name = "docstring-parser", marker = "sys_platform != 'darwin'" },
     { name = "httpx2", marker = "sys_platform != 'darwin'" },
     { name = "jiter", marker = "sys_platform != 'darwin'" },
-    { name = "opentelemetry-api", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-api", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "pydantic", marker = "sys_platform != 'darwin'" },
     { name = "sniffio", marker = "sys_platform != 'darwin'" },
     { name = "typing-extensions", marker = "sys_platform != 'darwin'" },
@@ -240,7 +240,7 @@ version = "4.15.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "idna" },
-    { name = "typing-extensions", marker = "python_full_version < '3.15' or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.15'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94", size = 276966, upload-time = "2026-09-05T10:42:39.44Z" }
 wheels = [
@@ -904,8 +904,8 @@ version = "1.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-pathfinder", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/58/f0/437869ea39a6c97468d1141dcee862ccc3e409e8afabd78896e42213c867/cuda_core-1.2.2-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:29f0b14a513374e47c6bbd7f1185d735a9a8c3573abf8da4e836805c3d6c7d82", size = 6212012, upload-time = "2026-10-16T13:58:48.968Z" },
@@ -1350,8 +1350,8 @@ dependencies = [
     { name = "nccl-extensions", marker = "sys_platform != 'darwin'" },
     { name = "nccl4py", marker = "sys_platform != 'darwin'" },
     { name = "ninja", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "nvidia-cudnn-frontend", marker = "sys_platform != 'darwin'" },
     { name = "nvidia-cutlass-dsl", marker = "sys_platform != 'darwin'" },
     { name = "nvidia-ml-py", marker = "sys_platform != 'darwin'" },
@@ -1476,7 +1476,7 @@ version = "1.75.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or extra == 'group-9-tool-eval-dev'" },
-    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8d/2b/6ce81972d5c8cab9705fddce3153be63222d9e12fd96f8baba5038a744dd/googleapis_common_protos-1.75.5.tar.gz", hash = "sha256:c7a866fc34ed29a3b10af627a4b9b1dc2433313ca6e959f0ae4feb132047ed72", size = 156513, upload-time = "2026-09-29T19:26:14.863Z" }
 wheels = [
@@ -1745,12 +1745,12 @@ name = "httpx2"
 version = "2.13.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "anyio", marker = "sys_platform != 'emscripten' or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "httpcore2", marker = "sys_platform != 'emscripten' or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "httpx2-jsfetch", marker = "sys_platform == 'emscripten' or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "anyio", marker = "sys_platform != 'emscripten'" },
+    { name = "httpcore2", marker = "sys_platform != 'emscripten'" },
+    { name = "httpx2-jsfetch", marker = "sys_platform == 'emscripten'" },
     { name = "idna" },
-    { name = "truststore", marker = "sys_platform != 'emscripten' or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "truststore", marker = "sys_platform != 'emscripten'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d5/44/474bef2a0e9d90f1715d32cb98b0738695ca17ba324095fb2497ed7fbd59/httpx2-2.13.1.tar.gz", hash = "sha256:e48744a19e3af5ee48313d0ce5fe941d5422fae5705ea922a4aabf94d7800dfa", size = 100405, upload-time = "2026-09-23T07:47:23.052Z" }
 wheels = [
@@ -1793,8 +1793,8 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-bindings", marker = "sys_platform != 'darwin'" },
     { name = "jinja2", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "safetensors", marker = "sys_platform != 'darwin'" },
     { name = "tabulate", marker = "sys_platform != 'darwin'" },
     { name = "torch", marker = "sys_platform != 'darwin'" },
@@ -1814,10 +1814,10 @@ wheels = [
 cu13 = [
     { name = "nvidia-cuda-cccl", marker = "sys_platform != 'darwin'" },
     { name = "nvidia-cuda-nvcc", marker = "sys_platform != 'darwin'" },
-    { name = "nvidia-cuda-nvrtc", version = "13.0.88", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "nvidia-cuda-nvrtc", version = "13.5.37", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "nvidia-cuda-runtime", version = "13.0.96", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "nvidia-cuda-runtime", version = "13.5.37", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cuda-nvrtc", version = "13.0.88", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cuda-nvrtc", version = "13.5.37", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cuda-runtime", version = "13.0.96", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cuda-runtime", version = "13.5.37", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 
 [[package]]
@@ -2354,7 +2354,7 @@ dependencies = [
     { name = "anyio" },
     { name = "distro" },
     { name = "httpx2" },
-    { name = "orjson", marker = "platform_python_implementation != 'PyPy' or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "orjson", marker = "platform_python_implementation != 'PyPy'" },
     { name = "packaging" },
     { name = "pydantic" },
     { name = "requests" },
@@ -2697,8 +2697,8 @@ dependencies = [
     { name = "httpx2", marker = "sys_platform != 'darwin'" },
     { name = "jsonschema", marker = "sys_platform != 'darwin'" },
     { name = "mcp-types", marker = "sys_platform != 'darwin'" },
-    { name = "opentelemetry-api", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-api", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "pydantic", marker = "sys_platform != 'darwin'" },
     { name = "pyjwt", extra = ["crypto"], marker = "(sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "python-multipart", marker = "sys_platform != 'darwin'" },
@@ -2742,8 +2742,8 @@ version = "1.13.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonschema", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "pillow", marker = "sys_platform != 'darwin'" },
     { name = "pydantic", marker = "sys_platform != 'darwin'" },
     { name = "pydantic-extra-types", extra = ["pycountry"], marker = "(sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
@@ -2765,8 +2765,8 @@ name = "ml-dtypes"
 version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/12/72/307d7c4bd0600601c7133fba5cb78af7db968152951c1cd473abb1cda782/ml_dtypes-0.6.0.tar.gz", hash = "sha256:5e60251d32ced5598972e4d5e06a2f044341f9291402551a3f6f0ec44f9299b0", size = 3032327, upload-time = "2026-08-13T14:14:40.215Z" }
 wheels = [
@@ -3107,8 +3107,8 @@ dependencies = [
     { name = "cuda-core", marker = "sys_platform != 'darwin'" },
     { name = "cuda-pathfinder", marker = "sys_platform != 'darwin'" },
     { name = "nccl4py", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "packaging", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
@@ -3129,8 +3129,8 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-core", marker = "sys_platform != 'darwin'" },
     { name = "cuda-pathfinder", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "packaging", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
@@ -3185,8 +3185,8 @@ version = "0.65.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "llvmlite", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/49/61/7299643b9c18d669e04be7c5bcb64d985070d07553274817b45b049e7bfe/numba-0.65.0.tar.gz", hash = "sha256:edad0d9f6682e93624c00125a471ae4df186175d71fd604c983c377cdc03e68b", size = 2764131, upload-time = "2026-04-01T03:52:01.946Z" }
 wheels = [
@@ -3281,8 +3281,8 @@ version = "2.4.6"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 's390x' and sys_platform != 'darwin'",
-    "python_full_version == '3.13.*' and platform_machine == 's390x' and sys_platform != 'darwin'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin'",
+    "python_full_version == '3.13.*' and platform_machine == 's390x' and sys_platform != 'darwin'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d0/ad/fed0499ce6a338d2a03ebae59cd15093910c8875328855781952abf6c2fe/numpy-2.4.6.tar.gz", hash = "sha256:f3a3570c4a2a16746ac2c31a7c7c7b0c186b95ce902e33db6f28094ed7387dda", size = 20735807, upload-time = "2026-05-18T23:37:14.07Z" }
@@ -3392,13 +3392,12 @@ wheels = [
 
 [[package]]
 name = "nvidia-cuda-crt"
-version = "13.5.37"
+version = "13.0.88"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/7a/b851c96c150ab1cc57129f087c0c6513eb547b9934391f804877aae8ba6d/nvidia_cuda_crt-13.5.37-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9ed2c565fdf3244fa6719769a80a466b85bfd4b1467ea339353bc91c971d09e0", size = 166163, upload-time = "2026-11-04T23:21:59.297Z" },
-    { url = "https://files.pythonhosted.org/packages/d5/ac/fb3ca43f437405ce33bfd8ba64503148fdc9198265f26f8ecd1bd6e76338/nvidia_cuda_crt-13.5.37-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:e898b7f73d3035fa89915a3f7bf3b54a73e90249746111aed295822c4729bb29", size = 166163, upload-time = "2026-11-04T23:22:04.288Z" },
-    { url = "https://files.pythonhosted.org/packages/f7/a0/e69114c053cf1c999ceb9e4a1868dab7b5fb7229c0f934dc03ff0d9608d7/nvidia_cuda_crt-13.5.37-py3-none-win_amd64.whl", hash = "sha256:30cded98a895e80586b4e233afd4e09e511205c767f1921a28710900a2399818", size = 167183, upload-time = "2026-11-04T23:34:38.436Z" },
-    { url = "https://files.pythonhosted.org/packages/b4/43/ddeeab6b6cb60e4f461035cc2317a0cb593c0caf6ef86fd83d50d4b0b1c8/nvidia_cuda_crt-13.5.37-py3-none-win_arm64.whl", hash = "sha256:a737531f9da5224958c771a5c428e007d8ffd5606d758f945713eac02517a2f9", size = 178180, upload-time = "2026-11-04T23:39:34.292Z" },
+    { url = "https://files.pythonhosted.org/packages/49/b9/2cb230193e1570221eee8c9739f965bb4874bad44ee4c3373a5860d24c90/nvidia_cuda_crt-13.0.88-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:ee2ea2a97073e02ee62bb27841f437332be2c248e3eac013df07997ada39c003", size = 134086, upload-time = "2025-09-04T08:25:33.024Z" },
+    { url = "https://files.pythonhosted.org/packages/05/69/a1ec4d9f0747d85964206feb47bf359f48a2d6af74c0add8abba6efe3dda/nvidia_cuda_crt-13.0.88-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:2c8043c7c9e02492716426e9919fc78d2c5b3b2a7a768a88e952676b08aa55a4", size = 134086, upload-time = "2025-09-04T08:25:40.741Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/7f/0b2cf089744eba336b40d273ee5cc45e464bd8289a635f6da6c4d7e7599b/nvidia_cuda_crt-13.0.88-py3-none-win_amd64.whl", hash = "sha256:31e02c52916804ca15e31f272a96181d8fadaf40c4c82a77a6f78071a22eccf3", size = 134862, upload-time = "2025-09-04T08:37:48.826Z" },
 ]
 
 [[package]]
@@ -3413,19 +3412,18 @@ wheels = [
 
 [[package]]
 name = "nvidia-cuda-nvcc"
-version = "13.5.37"
+version = "13.0.88"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "nvidia-cuda-crt", marker = "sys_platform != 'darwin'" },
-    { name = "nvidia-cuda-runtime", version = "13.0.96", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "nvidia-cuda-runtime", version = "13.5.37", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cuda-runtime", version = "13.0.96", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cuda-runtime", version = "13.5.37", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "nvidia-nvvm", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4e/a6/3a56f727048af470e542df5cdc6cb64c39748438e24df9b694ef2cfd1270/nvidia_cuda_nvcc-13.5.37-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:588eda18eb5076ae859fe272844b526459228af22df0b117f54eec3aa82bc9c8", size = 40745418, upload-time = "2026-11-04T23:23:02.588Z" },
-    { url = "https://files.pythonhosted.org/packages/0b/7d/21c734e63423dc53fb1b1ebbb6dee84e9ccafbeeaa30e9ae07e6fdcdd15b/nvidia_cuda_nvcc-13.5.37-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:f5c4f7ead5d964fb4af42bbf1e6d3ec3c1e6e9d83b53749f691d387e7fcaa3a7", size = 47028279, upload-time = "2026-11-04T23:23:11.782Z" },
-    { url = "https://files.pythonhosted.org/packages/68/dd/a92d46f1980c4bbe1adaa42408ee83bf00c3e98f5703fd6dc8473e086626/nvidia_cuda_nvcc-13.5.37-py3-none-win_amd64.whl", hash = "sha256:2e33114ed3109eabfaa820cf8ddd534d0b98c47065f8390a56e6eaae04dcca31", size = 35003238, upload-time = "2026-11-04T23:34:59.537Z" },
-    { url = "https://files.pythonhosted.org/packages/1a/5f/f1e1adece98974e1d9ef734a4f84437bde8cbbf2cae7bdaab5de1b564690/nvidia_cuda_nvcc-13.5.37-py3-none-win_arm64.whl", hash = "sha256:90cd227f071d1e36daf4f70ef7b57fd03f9f1c5a53ed9e9e47aece05f5af3c39", size = 31859277, upload-time = "2026-11-04T23:39:56.132Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/06/996d5cdc5ea45fb4a6111a1be4f0caf6556c0cb1bf9684a7252d8771797a/nvidia_cuda_nvcc-13.0.88-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:c7ff28f86a24effdc6c034fa15230c549a273e4771b10a7fec14996f8cf3307f", size = 32455430, upload-time = "2025-09-04T08:27:27.39Z" },
+    { url = "https://files.pythonhosted.org/packages/71/8b/a546c12881fffeba927d810598987df25d74b8b241788c7db8dfc93b0173/nvidia_cuda_nvcc-13.0.88-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:56fe502eb77625a12f25172caa3cdddb4e4c8ba2c8c17dba44b164761b380f03", size = 37384532, upload-time = "2025-09-04T08:27:37.916Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/07/e01232390dbb208b8e8639261aef7b484f40ac64499ae3993fecd2f65f84/nvidia_cuda_nvcc-13.0.88-py3-none-win_amd64.whl", hash = "sha256:7c3a32c8ca9866addfd784da363ddee2f6874d560027a296f583e86a61f2d543", size = 29792773, upload-time = "2025-09-04T08:38:41.729Z" },
 ]
 
 [[package]]
@@ -3495,8 +3493,8 @@ name = "nvidia-cudnn-cu13"
 version = "9.24.0.43"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas", version = "13.1.1.3", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "nvidia-cublas", version = "13.10.0.20", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cublas", version = "13.1.1.3", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cublas", version = "13.10.0.20", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ca/30/7c257e3d5cb4fecb147b93895c66e29c93f8e76d74b45bb418ff0587c4ec/nvidia_cudnn_cu13-9.24.0.43-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:a6812a554a1ff0413e9c52b84c26c050380649ab9615f9c16bded368ce9f421f", size = 650976863, upload-time = "2026-07-02T16:23:39.248Z" },
@@ -3510,7 +3508,7 @@ version = "1.32.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-tvm-ffi", marker = "(platform_machine != 'ARM64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'win32')" },
-    { name = "nvidia-cutlass-dsl", extra = ["cu13"], marker = "(platform_machine != 'ARM64' and sys_platform == 'win32' and extra == 'group-9-tool-eval-llm') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'win32' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "nvidia-cutlass-dsl", extra = ["cu13"], marker = "(platform_machine != 'ARM64' and sys_platform == 'win32' and extra == 'group-9-tool-eval-llm') or (sys_platform != 'darwin' and sys_platform != 'win32' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/34/03/2a7a61af93c2bd83cbd68c95f738102cf0e6178587b26dc3430cc96ecb12/nvidia_cudnn_frontend-1.32.2-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:7d55ceb51bad55ee1cd2c650b78d657bde8b09cdb545d48de38dc0e8e4d9388b", size = 11441935, upload-time = "2026-11-04T19:33:50.307Z" },
@@ -3626,8 +3624,8 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-bindings", marker = "sys_platform != 'darwin'" },
     { name = "nvidia-cutlass-dsl-libs-core", marker = "sys_platform != 'darwin'" },
-    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "typing-extensions", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
@@ -3651,8 +3649,8 @@ version = "4.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-bindings", marker = "sys_platform != 'darwin'" },
-    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "typing-extensions", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
@@ -3666,8 +3664,8 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-bindings", marker = "sys_platform != 'darwin'" },
     { name = "nvidia-cutlass-dsl-libs-base", marker = "sys_platform != 'darwin'" },
-    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "typing-extensions", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
@@ -3692,8 +3690,8 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-bindings", marker = "sys_platform != 'darwin'" },
     { name = "nvidia-cutlass-dsl-libs-base", marker = "sys_platform != 'darwin'" },
-    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "typing-extensions", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
@@ -3761,13 +3759,12 @@ wheels = [
 
 [[package]]
 name = "nvidia-nvvm"
-version = "13.5.37"
+version = "13.0.88"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/dc/c7089283bad8e8089825b0cae0898f8a89b5d27bdb2edea5266d259101e1/nvidia_nvvm-13.5.37-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:c41bfa362e407405163f103c2229f0765f8cc2ed7d148b754dc77f228bf7e070", size = 75141406, upload-time = "2026-11-04T23:34:21.038Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/be/a152634e925a585dea74cd914cda6701307bfe1111c09d50a9a931de72e5/nvidia_nvvm-13.5.37-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:b659bd3115b7ac7ec8931e67d0e2c0dd09cd35b08a6a7372df6f8f22c67da80a", size = 71213582, upload-time = "2026-11-04T23:34:08.393Z" },
-    { url = "https://files.pythonhosted.org/packages/9d/44/cba64750f1bb4dbd94865dbec1fba78eafc757cf9b0a71be1ca4dbb75d9d/nvidia_nvvm-13.5.37-py3-none-win_amd64.whl", hash = "sha256:9422cd190cedabca85f88de6674e0ee16f508915698517e04bfaf193f1809c21", size = 64413736, upload-time = "2026-11-04T23:39:09.382Z" },
-    { url = "https://files.pythonhosted.org/packages/28/d4/f5aebf3520fefdde484866ff88294dbaba96a39de77a706d013def31f059/nvidia_nvvm-13.5.37-py3-none-win_arm64.whl", hash = "sha256:1d7fa33c5c54685233eceb8b9e2911df710b20af538019713fb8ab94ce5b1717", size = 58371631, upload-time = "2026-11-04T23:43:52.406Z" },
+    { url = "https://files.pythonhosted.org/packages/15/b0/ee41e6d1108d959b5097163e7190c2d0f7857dea75606ce358f0275891b4/nvidia_nvvm-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:c5f41ffeb6466944a026dfa5317d7d85355c119bbec279205d22f1869d1054e0", size = 61601415, upload-time = "2025-09-04T08:37:09.142Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/bd/fc52fbf7214391909d6d2b3a825fd0902ebf7fbc56227dd9c9277e8e263b/nvidia_nvvm-13.0.88-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:c4376a291d72d22a315d9d2f69bdae8f8cd83a627f75bad395cee49a0fe65dc1", size = 59234185, upload-time = "2025-09-04T08:36:46.505Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/10/0bd3f5983d6fe5bf5926d4e63ac590e9e463b76857d90a365dc10c27ab4f/nvidia_nvvm-13.0.88-py3-none-win_amd64.whl", hash = "sha256:2ef0db7849e476d3b2fc3c09b27bdd79bd7ea8ce58cd9c86553d64ea40844ba0", size = 54354888, upload-time = "2025-09-04T08:43:49.746Z" },
 ]
 
 [[package]]
@@ -3815,8 +3812,8 @@ name = "opencv-python-headless"
 version = "5.0.0.93"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1d/99/76b7c80252aa83c1af16393454aafd125a0287101afe8deb0a6821af0e30/opencv_python_headless-5.0.0.93.tar.gz", hash = "sha256:b82f9831daab90b725c7c1ee1b36cb5732c367096ac76d119e64e14eb70d5f3c", size = 81817738, upload-time = "2026-07-02T07:01:06.039Z" }
 wheels = [
@@ -3835,10 +3832,10 @@ name = "opentelemetry-api"
 version = "1.42.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version < '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
 ]
 dependencies = [
@@ -3936,10 +3933,10 @@ name = "opentelemetry-exporter-otlp-proto-common"
 version = "1.42.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version < '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
 ]
 dependencies = [
@@ -4019,10 +4016,10 @@ name = "opentelemetry-exporter-otlp-proto-http"
 version = "1.42.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version < '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
 ]
 dependencies = [
@@ -4051,7 +4048,7 @@ resolution-markers = [
 dependencies = [
     { name = "googleapis-common-protos", marker = "platform_machine == 's390x' and sys_platform != 'darwin'" },
     { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 's390x' and sys_platform != 'darwin'" },
-    { name = "opentelemetry-exporter-http-transport", extra = ["requests"], marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-exporter-http-transport", extra = ["requests"], marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "opentelemetry-exporter-otlp-common", marker = "platform_machine == 's390x' and sys_platform != 'darwin'" },
     { name = "opentelemetry-exporter-otlp-proto-common", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 's390x' and sys_platform != 'darwin'" },
     { name = "opentelemetry-proto", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 's390x' and sys_platform != 'darwin'" },
@@ -4083,10 +4080,10 @@ name = "opentelemetry-proto"
 version = "1.42.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version < '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
 ]
 dependencies = [
@@ -4119,10 +4116,10 @@ name = "opentelemetry-sdk"
 version = "1.42.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version < '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
 ]
 dependencies = [
@@ -4159,10 +4156,10 @@ name = "opentelemetry-semantic-conventions"
 version = "0.63b1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version < '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
 ]
 dependencies = [
@@ -4197,10 +4194,10 @@ name = "opentelemetry-semantic-conventions-ai"
 version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "opentelemetry-sdk", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-sdk", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-semantic-conventions", version = "0.63b1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-semantic-conventions", version = "0.66b2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-sdk", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-sdk", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-semantic-conventions", version = "0.63b1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-semantic-conventions", version = "0.66b2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/24/02/10aeacc37a38a3a8fa16ff67bec1ae3bf882539f6f9efb0f70acf802ca2d/opentelemetry_semantic_conventions_ai-0.5.1.tar.gz", hash = "sha256:153906200d8c1d2f8e09bd78dbef526916023de85ac3dab35912bfafb69ff04c", size = 26533, upload-time = "2026-03-26T14:20:38.73Z" }
 wheels = [
@@ -4599,10 +4596,10 @@ name = "protobuf"
 version = "6.33.6"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
+    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
     "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin' and extra != 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm'",
-    "python_full_version >= '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
     "python_full_version < '3.15' and extra == 'group-9-tool-eval-dev' and extra != 'group-9-tool-eval-llm'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/66/70/e908e9c5e52ef7c3a6c7902c9dfbb34c7e29c25d2f81ade3856445fd5c94/protobuf-6.33.6.tar.gz", hash = "sha256:a6768d25248312c297558af96a9f9c929e8c4cee0659cb07e780731095f38135", size = 444531, upload-time = "2026-03-18T19:05:00.988Z" }
@@ -5803,10 +5800,10 @@ version = "80.10.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_machine == 's390x' and sys_platform != 'darwin'",
-    "python_full_version == '3.13.*' and platform_machine == 's390x' and sys_platform != 'darwin'",
-    "python_full_version < '3.13' and platform_machine == 's390x' and sys_platform != 'darwin'",
     "python_full_version >= '3.14' and platform_machine != 's390x' and sys_platform != 'darwin'",
+    "python_full_version == '3.13.*' and platform_machine == 's390x' and sys_platform != 'darwin'",
     "python_full_version == '3.13.*' and platform_machine != 's390x' and sys_platform != 'darwin'",
+    "python_full_version < '3.13' and platform_machine == 's390x' and sys_platform != 'darwin'",
     "python_full_version < '3.13' and platform_machine != 's390x' and sys_platform != 'darwin'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/95/faf61eb8363f26aa7e1d762267a8d602a1b26d4f3a1e758e92cb3cb8b054/setuptools-80.10.2.tar.gz", hash = "sha256:8b0e9d10c784bf7d262c4e5ec5d4ec94127ce206e8738f29a437945fbc219b70", size = 1200343, upload-time = "2026-01-25T22:38:17.252Z" }
@@ -5990,8 +5987,8 @@ dependencies = [
     { name = "apache-tvm-ffi", marker = "sys_platform != 'darwin'" },
     { name = "cloudpickle", marker = "sys_platform != 'darwin'" },
     { name = "ml-dtypes", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "psutil", marker = "sys_platform != 'darwin'" },
     { name = "torch", marker = "sys_platform != 'darwin'" },
     { name = "torch-c-dlpack-ext", marker = "python_full_version < '3.14' and sys_platform != 'darwin'" },
@@ -6093,6 +6090,9 @@ dev = [
     { name = "types-pyyaml" },
 ]
 llm = [
+    { name = "nvidia-cuda-crt", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
+    { name = "nvidia-cuda-nvcc", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
+    { name = "nvidia-nvvm", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
     { name = "vllm", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
 ]
 
@@ -6117,7 +6117,12 @@ dev = [
     { name = "types-defusedxml", specifier = ">=0.7.0.20260504" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20261103" },
 ]
-llm = [{ name = "vllm", marker = "python_full_version < '3.15' and sys_platform == 'linux'", specifier = "==0.33.0" }]
+llm = [
+    { name = "nvidia-cuda-crt", marker = "python_full_version < '3.15' and sys_platform == 'linux'", specifier = "==13.0.88" },
+    { name = "nvidia-cuda-nvcc", marker = "python_full_version < '3.15' and sys_platform == 'linux'", specifier = "==13.0.88" },
+    { name = "nvidia-nvvm", marker = "python_full_version < '3.15' and sys_platform == 'linux'", specifier = "==13.0.88" },
+    { name = "vllm", marker = "python_full_version < '3.15' and sys_platform == 'linux'", specifier = "==0.33.0" },
+]
 
 [[package]]
 name = "torch"
@@ -6235,8 +6240,8 @@ name = "torchvision"
 version = "0.29.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "pillow", marker = "sys_platform != 'darwin'" },
     { name = "torch", marker = "sys_platform != 'darwin'" },
 ]
@@ -6277,8 +6282,8 @@ version = "5.20.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "packaging", marker = "sys_platform != 'darwin'" },
     { name = "pyyaml", marker = "sys_platform != 'darwin'" },
     { name = "regex", marker = "sys_platform != 'darwin'" },
@@ -6556,19 +6561,19 @@ dependencies = [
     { name = "multidict", marker = "sys_platform != 'darwin'" },
     { name = "ninja", marker = "sys_platform != 'darwin'" },
     { name = "numba", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "nvidia-cudnn-frontend", marker = "sys_platform != 'darwin'" },
     { name = "nvidia-cutlass-dsl", extra = ["cu13"], marker = "(sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "nvtx", marker = "sys_platform != 'darwin'" },
     { name = "openai", marker = "sys_platform != 'darwin'" },
     { name = "opencv-python-headless", marker = "sys_platform != 'darwin'" },
-    { name = "opentelemetry-api", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-exporter-otlp", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-exporter-otlp", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-sdk", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "opentelemetry-sdk", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-api", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-api", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-exporter-otlp", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-exporter-otlp", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-sdk", version = "1.42.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "opentelemetry-sdk", version = "1.45.2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "opentelemetry-semantic-conventions-ai", marker = "sys_platform != 'darwin'" },
     { name = "orjson", marker = "sys_platform != 'darwin'" },
     { name = "oss-harmony", marker = "sys_platform != 'darwin'" },
@@ -6577,8 +6582,8 @@ dependencies = [
     { name = "pillow", marker = "sys_platform != 'darwin'" },
     { name = "prometheus-client", marker = "sys_platform != 'darwin'" },
     { name = "prometheus-fastapi-instrumentator", marker = "sys_platform != 'darwin'" },
-    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine == 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (platform_machine != 's390x' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "6.33.6", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "protobuf", version = "7.36.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 's390x' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "psutil", marker = "sys_platform != 'darwin'" },
     { name = "py-cpuinfo", marker = "sys_platform != 'darwin'" },
     { name = "pybase64", marker = "sys_platform != 'darwin'" },
@@ -6747,8 +6752,8 @@ version = "0.2.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-tvm-ffi", marker = "sys_platform != 'darwin'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version >= '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (python_full_version < '3.13' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm') or (sys_platform == 'darwin' and extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and sys_platform != 'darwin' and extra == 'group-9-tool-eval-llm') or (extra == 'group-9-tool-eval-dev' and extra == 'group-9-tool-eval-llm')" },
     { name = "pydantic", marker = "sys_platform != 'darwin'" },
     { name = "torch", marker = "sys_platform != 'darwin'" },
     { name = "transformers", marker = "sys_platform != 'darwin'" },

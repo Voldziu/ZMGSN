@@ -54,6 +54,11 @@ dev = [
 ]
 llm = [
     "vllm==0.33.0; sys_platform == 'linux' and python_version < '3.15'",
+    # FlashInfer JIT needs nvcc (and its crt/nvvm) to match torch's CUDA 13.0 headers;
+    # humming-kernels leaves nvcc unpinned, which resolves to a newer CUDA.
+    "nvidia-cuda-nvcc==13.0.88; sys_platform == 'linux' and python_version < '3.15'",
+    "nvidia-cuda-crt==13.0.88; sys_platform == 'linux' and python_version < '3.15'",
+    "nvidia-nvvm==13.0.88; sys_platform == 'linux' and python_version < '3.15'",
 ]
 
 [tool.uv]
