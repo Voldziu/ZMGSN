@@ -1,19 +1,21 @@
 """Agent construction: a tool-calling ReAct-style loop built with LangChain's `create_agent`."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ToolCallRequest, ToolErrorMiddleware
+from langchain.agents.middleware import ToolCallRequest, ToolErrorMiddleware, wrap_tool_call
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import AnyMessage, HumanMessage
+from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Command
 
 from tool_eval.config import Settings, get_settings
 from tool_eval.exceptions import ToolEvalError
 from tool_eval.llm import build_chat_model
 from tool_eval.prompts import load_prompt
+from tool_eval.tools.arguments import coerce_json_string_args
 from tool_eval.tools.registry import get_tools
 
 AgentGraph = CompiledStateGraph[Any, Any, Any, Any]
@@ -34,8 +36,30 @@ def build_agent(level: str, *, settings: Settings | None = None) -> AgentGraph:
         model=build_chat_model(active),
         tools=get_tools(level),
         system_prompt=load_prompt("system", active.prompt_version).text,
-        middleware=[ToolErrorMiddleware(_report_domain_error)],
+        middleware=[decode_json_string_args, ToolErrorMiddleware(_report_domain_error)],
     )
+
+
+@wrap_tool_call
+def decode_json_string_args(
+    request: ToolCallRequest,
+    handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
+) -> ToolMessage | Command[Any]:
+    """Decode list/object arguments sent as JSON strings before the tool validates them.
+
+    Args:
+        request: The pending tool call.
+        handler: Executes the (possibly rewritten) call.
+
+    Returns:
+        The tool's result.
+    """
+    if request.tool is not None:
+        args = request.tool_call["args"]
+        decoded = coerce_json_string_args(args, request.tool.args)
+        if decoded != args:
+            request = request.override(tool_call={**request.tool_call, "args": decoded})
+    return handler(request)
 
 
 def run_task(

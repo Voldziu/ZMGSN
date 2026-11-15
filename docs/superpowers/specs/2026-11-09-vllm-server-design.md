@@ -25,7 +25,7 @@ tool parsers, so the Python client is platform-agnostic.
 | Weights | Docker: bind mount `${HF_CACHE_DIR:-~/.cache/huggingface}` → `/root/.cache/huggingface`; macOS uses the same host cache natively; `HF_TOKEN` from `.env` |
 | Model on the client | Explicit `LLM_MODEL` in `.env`, equal to the preset's `served-model-name` (same on both platforms) |
 | Thinking mode | `LLM_ENABLE_THINKING` setting, default `false`, sent per request as `chat_template_kwargs` |
-| Agent controls | `max_tokens` 4096 as in MCP-GRANITE (arXiv:2609.24161). Evaluation keeps its own sampling (CLI `--temperature` 0.7, 10 repeats) to measure variance; `AGENT_TEMPERATURE=0` and 10 max steps stay for single runs |
+| Agent controls | `max_tokens` 4096 as in MCP-GRANITE (arXiv:2609.24161). Evaluation keeps its own sampling (CLI `--temperature` 0.7, 10 repeats) to measure variance; `AGENT_TEMPERATURE=0` stays for single runs; the step limit is 30 (was 10, see openspec change `stabilize-local-model-runs`) |
 
 ## Presets
 

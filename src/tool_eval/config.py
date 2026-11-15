@@ -11,6 +11,10 @@ from typing import Self
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Served model names whose chat template rejects several tool calls in one assistant message
+# (the Llama 3.1 template raises "This model only supports single tool-calls at once!").
+SINGLE_TOOL_CALL_PRESETS = frozenset({"llama"})
+
 
 class Settings(BaseSettings):
     """Validated configuration for the LLM, the agent and the research tools."""
@@ -27,8 +31,11 @@ class Settings(BaseSettings):
     llm_model: str = "qwen"
     llm_max_tokens: int = Field(default=4096, ge=1)
     llm_enable_thinking: bool = False
+    # Unset: preset default (see SINGLE_TOOL_CALL_PRESETS). False asks for one tool call per reply.
+    llm_parallel_tool_calls: bool | None = None
 
-    agent_max_steps: int = Field(default=10, ge=1)
+    # One-tool-per-turn models need about 25 calls for a five-paper review; 30 leaves headroom.
+    agent_max_steps: int = Field(default=30, ge=1)
     agent_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     prompt_version: str = "v1"
 
@@ -46,6 +53,18 @@ class Settings(BaseSettings):
     chunk_size: int = Field(default=3000, gt=400)
     pipeline_max_chunks: int = Field(default=6, ge=1)
     review_paper_count: int = Field(default=5, ge=1, le=10)
+
+    @property
+    def effective_parallel_tool_calls(self) -> bool | None:
+        """Parallel-tool-call policy sent to the server.
+
+        Returns:
+            `False` to ask for one tool call per reply, `True` to allow several, `None` to leave
+            it to the server's default.
+        """
+        if self.llm_parallel_tool_calls is not None:
+            return self.llm_parallel_tool_calls
+        return False if self.llm_model in SINGLE_TOOL_CALL_PRESETS else None
 
     @model_validator(mode="after")
     def _check_date_window(self) -> Self:

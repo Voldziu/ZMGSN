@@ -558,3 +558,17 @@ def test_repeatability_skips_scenarios_with_a_single_run() -> None:
     ]
     [summary] = summarize(records)
     assert summary.repeatability_score_std == pytest.approx(0.3536, abs=1e-3)
+
+
+def test_fingerprint_covers_step_limit_and_parallel_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("AGENT_MAX_STEPS", "LLM_PARALLEL_TOOL_CALLS"):
+        monkeypatch.delenv(name, raising=False)
+
+    def fingerprint(**extra: Any) -> str:
+        return runner.config_fingerprint(_settings(tmp_path, llm_model="qwen", **extra))
+
+    base = fingerprint()
+    assert fingerprint(agent_max_steps=10) != base
+    assert fingerprint(llm_parallel_tool_calls=False) != base

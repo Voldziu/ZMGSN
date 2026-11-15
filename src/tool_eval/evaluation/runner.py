@@ -39,6 +39,7 @@ def config_fingerprint(settings: Settings) -> str:
         "model": settings.llm_model,
         "temperature": settings.agent_temperature,
         "max_steps": settings.agent_max_steps,
+        "parallel_tool_calls": settings.effective_parallel_tool_calls,
         "prompt_version": settings.prompt_version,
         "system_prompt": load_prompt("system", settings.prompt_version).sha256,
         "task_prompt": load_prompt("evaluation", settings.prompt_version).sha256,

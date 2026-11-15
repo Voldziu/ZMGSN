@@ -13,7 +13,12 @@ cp .env.example .env
 
 Presets (set `LLM_MODEL` in `.env` to the preset name): `qwen`, `gemma`, `llama` (≤ 12 GB VRAM), `qwen-mid` (~8 GB), `qwen-weak` (~4 GB). Definitions: `src/tool_eval/server/presets/{cuda,metal}/`. Both paths serve `http://localhost:8000/v1`.
 
-NVIDIA GPU — Linux, or Windows with Docker Desktop (WSL 2 backend); driver ≥ 580:
+NVIDIA GPU — Linux, or Windows with Docker Desktop (WSL 2 backend). Host prerequisites:
+
+- NVIDIA driver ≥ 580 (CUDA 13).
+- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html), registered with Docker: `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker`.
+- Your user in the `docker` group: `sudo usermod -aG docker $USER`, then log in again.
+- Check: `docker run --rm --gpus all nvidia/cuda:13.0.2-base-ubuntu24.04 nvidia-smi` lists the GPU.
 
 ```sh
 docker compose --profile qwen up -d --build
@@ -33,6 +38,8 @@ GLOO_SOCKET_IFNAME=lo0 vllm serve --config src/tool_eval/server/presets/metal/qw
 `GLOO_SOCKET_IFNAME=lo0` avoids a long startup stall when macOS cannot resolve the local hostname.
 
 Gated models need `HF_TOKEN` (in `.env` for Docker, exported in the shell for macOS). Mac presets use MLX 4-bit weights, so their results are not directly comparable with the CUDA runs.
+
+Per-preset client behaviour: `llama` gets one tool call per reply (`parallel_tool_calls: false`), because its chat template rejects several tool calls in one message; the other presets keep parallel calls. `LLM_PARALLEL_TOOL_CALLS=true|false` overrides this for any preset. Runs allow 30 model calls (`AGENT_MAX_STEPS`), enough for models that call one tool per turn.
 
 ## Evaluate
 
