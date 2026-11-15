@@ -22,7 +22,7 @@
 
 ## 4. Multi-preset evaluation command
 
-- [ ] 4.1 Add `make eval-presets` (`PRESETS`, `REPEATS`, `ONLY`, `LEVELS`) backed by `src/tool_eval/server/eval-presets.sh`. It starts vllm-metal on macOS or Docker Compose elsewhere, waits for readiness, runs the evaluation into `results/presets-<preset>.jsonl`, stops the server (also on Ctrl-C), and prints the per-level report. Verify with an unknown preset (rejected), and with a real run of `qwen-weak` on the Mac and on the RTX.
+- [x] 4.1 Add `make eval-presets` (`PRESETS`, `REPEATS`, `ONLY`, `LEVELS`) backed by `src/tool_eval/server/eval-presets.sh`. It starts vllm-metal on macOS or Docker Compose elsewhere, waits for readiness, runs the evaluation into `results/presets-<preset>.jsonl`, stops the server (also on Ctrl-C), and prints the per-level report. Verify with an unknown preset (rejected), and with a real run of `qwen-weak` on the Mac and on the RTX.
 - [x] 4.2 Document `make eval-presets` in README and verify that `make` lists it.
 
 ## 5. Verification on hardware
