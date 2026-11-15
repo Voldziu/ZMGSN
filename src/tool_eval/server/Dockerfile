@@ -1,6 +1,7 @@
-FROM nvidia/cuda:13.0.2-base-ubuntu24.04
+FROM nvidia/cuda:13.0.2-devel-ubuntu24.04
 
-# Host compiler for nvcc / Triton JIT; the CUDA toolkit itself comes from torch's pip wheels.
+# FlashInfer JIT-compiles kernels at server start and links against the full toolkit
+# layout ($CUDA_HOME/lib64, lib64/stubs); torch's pip CUDA wheels do not provide it.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -16,7 +17,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --only-group llm --no-install-project
-ENV CUDA_HOME=/app/.venv/lib/python3.12/site-packages/nvidia/cu13
+ENV CUDA_HOME=/usr/local/cuda
 ENV PATH=/app/.venv/bin:$CUDA_HOME/bin:$PATH
 
 COPY src/tool_eval/server/templates /app/templates
