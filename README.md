@@ -43,6 +43,17 @@ Per-preset client behaviour: `llama` gets one tool call per reply (`parallel_too
 
 ## Evaluate
 
+Several presets in one go (starts and stops each server itself, on macOS or with Docker; no server may be running):
+
+```sh
+make eval-presets                                         # all presets, rag-2024h1, level1, 3 repeats
+make eval-presets PRESETS="llama gemma" REPEATS=10 ONLY= LEVELS="level1 level2 level3"   # ONLY= runs all scenarios
+```
+
+Results go to `results/presets-<preset>.jsonl`; running the same command again resumes unfinished runs (delete the file to start over). Server logs: `logs/server-<preset>.log`.
+
+Single runs against a server you started yourself:
+
 ```sh
 uv run python -m tool_eval.main run                          # all scenarios, all levels, 10 repeats
 uv run python -m tool_eval.main run --only rag-2024h1 --levels level1 --repeats 1   # quick check

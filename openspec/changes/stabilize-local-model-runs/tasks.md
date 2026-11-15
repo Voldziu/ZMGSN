@@ -20,11 +20,16 @@
 - [x] 3.1 Add a tool-call middleware that decodes JSON-string values for `array`/`object` arguments before validation. Verify with tests: a stringified list is accepted, a non-JSON string still fails, and a string argument stays unchanged.
 - [x] 3.2 Change the default `agent_max_steps` from 10 to 30 and update `.env.example` and the docs. Verify with a settings-default test and a test that `max_steps` changes the config hash.
 
-## 4. Verification on hardware
+## 4. Multi-preset evaluation command
 
-- [ ] 4.1 On the RTX 5080, run each of the 5 presets with 3 repeats at the default limit. Verify that no run ends with HTTP 400, that `llama` and `gemma` can complete, and record status, score, calls and tool errors per preset.
-- [x] 4.2 Run the unit tests, `ruff` and `mypy`, and verify they all pass.
+- [ ] 4.1 Add `make eval-presets` (`PRESETS`, `REPEATS`, `ONLY`, `LEVELS`) backed by `src/tool_eval/server/eval-presets.sh`. It starts vllm-metal on macOS or Docker Compose elsewhere, waits for readiness, runs the evaluation into `results/presets-<preset>.jsonl`, stops the server (also on Ctrl-C), and prints the per-level report. Verify with an unknown preset (rejected), and with a real run of `qwen-weak` on the Mac and on the RTX.
+- [x] 4.2 Document `make eval-presets` in README and verify that `make` lists it.
+
+## 5. Verification on hardware
+
+- [ ] 5.1 On the RTX 5080, run each of the 5 presets with 3 repeats at the default limit. Verify that no run ends with HTTP 400, that `llama` and `gemma` can complete, and record status, score, calls and tool errors per preset.
+- [x] 5.2 Run the unit tests, `ruff` and `mypy`, and verify they all pass.
 
 ## Workflow follow-up
 
-- Archive the change once section 4 is done, which syncs the three specs.
+- Archive the change once section 5 is done, which syncs the three specs.

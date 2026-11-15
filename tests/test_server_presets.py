@@ -57,3 +57,13 @@ def test_compose_runs_each_cuda_preset() -> None:
     for name, service in services.items():
         assert service["profiles"] == [name]
         assert service["command"] == ["--config", f"/app/presets/cuda/{name}.yaml"]
+
+
+def test_preset_lists_match_preset_files() -> None:
+    root = SERVER_DIR.parents[2]
+    makefile = (root / "Makefile").read_text(encoding="utf-8")
+    script = (SERVER_DIR / "eval-presets.sh").read_text(encoding="utf-8")
+    make_line = next(line for line in makefile.splitlines() if line.startswith("ALL_PRESETS :="))
+    script_line = next(line for line in script.splitlines() if line.startswith("ALL_PRESETS="))
+    assert set(make_line.split(":=", 1)[1].split()) == PRESET_NAMES
+    assert set(script_line.split("=", 1)[1].strip('"').split()) == PRESET_NAMES

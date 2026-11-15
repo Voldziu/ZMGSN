@@ -1,22 +1,27 @@
 # Cheat sheet for the vLLM model server. Run `make` to list the steps.
 # Pick a preset with PRESET=<name>; LLM_MODEL in .env must match it.
 
-PRESETS := qwen gemma llama qwen-mid qwen-weak
+ALL_PRESETS := qwen gemma llama qwen-mid qwen-weak
 PRESET ?= qwen
+# eval-presets: which presets, how many repeats, which scenarios (empty = all) and levels.
+PRESETS ?= $(ALL_PRESETS)
+REPEATS ?= 3
+ONLY ?= rag-2024h1
+LEVELS ?= level1
 API := http://localhost:8000/v1
 # Homebrew install first, otherwise the install.sh venv.
 VLLM ?= $(shell command -v vllm 2>/dev/null || echo $(HOME)/.venv-vllm-metal/bin/vllm)
 
-ifeq ($(filter $(PRESET),$(PRESETS)),)
-$(error PRESET must be one of: $(PRESETS))
+ifeq ($(filter $(PRESET),$(ALL_PRESETS)),)
+$(error PRESET must be one of: $(ALL_PRESETS))
 endif
 
 .DEFAULT_GOAL := help
 .PHONY: help mac-install mac-serve docker-up docker-status docker-logs docker-down \
-	models tool-check eval-smoke test
+	models tool-check eval-smoke eval-presets test
 
 help: ## Show this cheat sheet
-	@echo "Usage: make <target> PRESET=<name>   presets: $(PRESETS)   (default: $(PRESET))"
+	@echo "Usage: make <target> PRESET=<name>   presets: $(ALL_PRESETS)   (default: $(PRESET))"
 	@awk 'BEGIN {FS = ":.*## "} \
 		/^##@/ {printf "\n%s\n", substr($$0, 5)} \
 		/^[a-z-]+:.*## / {printf "  make %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -68,6 +73,11 @@ eval-smoke: ## 5. One evaluation run against the server (writes results/smoke-<p
 	LLM_BASE_URL=$(API) LLM_MODEL=$(PRESET) uv run python -m tool_eval.main run \
 		--only rag-2024h1 --levels level1 --repeats 1 \
 		--output results/smoke-$(PRESET).jsonl --runs-dir workspace/smoke-runs
+
+##@ Evaluate several presets (any platform, no server running)
+eval-presets: ## Start each preset, run the evaluation, stop it (PRESETS, REPEATS, ONLY, LEVELS)
+	@PRESETS="$(PRESETS)" REPEATS="$(REPEATS)" ONLY="$(ONLY)" LEVELS="$(LEVELS)" VLLM="$(VLLM)" \
+		bash src/tool_eval/server/eval-presets.sh
 
 test: ## Unit tests, lint, types (no server needed)
 	uv run pytest -q && uv run ruff check . && uv run mypy src tests
