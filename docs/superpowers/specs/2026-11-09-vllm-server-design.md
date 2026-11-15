@@ -49,7 +49,7 @@ CUDA (`presets/cuda/`), budget = `gpu-memory-utilization` × 16 GB, multimodal i
 | `qwen` | `cyankiwi/Qwen3.5-9B-AWQ-4bit` | AWQ 4-bit (compressed-tensors) | 12 GB (0.75) |
 | `gemma` | `google/gemma-4-12B-it-qat-w4a16-ct` | QAT W4A16 | 12 GB (0.75) |
 | `llama` | `hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4` | AWQ 4-bit | 12 GB (0.75) |
-| `qwen-mid` | `Qwen/Qwen3.5-4B` | FP8 online (`quantization: fp8`) | 6 GB (0.375) |
+| `qwen-mid` | `Qwen/Qwen3.5-4B` | FP8 online (`quantization: fp8`) | 8 GB (0.5) |
 | `qwen-weak` | `Qwen/Qwen3.5-0.8B` | BF16 | 4 GB (0.25) |
 
 Metal (`presets/metal/`), Mac with 32 GB unified memory, `vllm-metal` default memory fraction:
@@ -66,7 +66,7 @@ Notes:
 
 - Llama 3.1-8B is the newest Llama that fits; Meta has released no smaller model since (Llama 4 starts above 100B total parameters).
 - Qwen3.6/3.8 start at 27B, so all Qwen presets use Qwen3.5.
-- If `qwen-mid` does not fit in 6 GB with FP8, fall back to `sanskar003/Qwen3.5-4B-AWQ`.
+- `qwen-mid` was planned at 6 GB (0.375), but on the RTX 5080 the FP8 model alone took 4.71 GiB (embeddings and lm_head stay BF16), leaving no KV cache; the budget is 8 GB (0.5).
 - Utilization fractions assume a 16 GB card; on another GPU they must be recomputed.
 - CUDA and Metal presets use different 4-bit formats (AWQ/W4A16 vs MLX) of the same models. Mac
   results are for development; thesis comparisons use the RTX runs.

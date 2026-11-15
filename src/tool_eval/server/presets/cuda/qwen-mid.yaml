@@ -3,7 +3,7 @@ served-model-name: qwen-mid
 max-model-len: 32768
 # The evaluation sends one request at a time; vLLM's default of 256 does not fit small budgets.
 max-num-seqs: 8
-gpu-memory-utilization: 0.375
+gpu-memory-utilization: 0.5
 quantization: fp8
 enable-auto-tool-choice: true
 tool-call-parser: qwen3_coder
