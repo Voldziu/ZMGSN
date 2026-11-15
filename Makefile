@@ -51,13 +51,16 @@ docker-down: ## Stop the preset (required before starting another one: same port
 models: ## 3. List served models (expect the preset name)
 	@curl -s $(API)/models | python3 -m json.tool | grep '"id"'
 
+# A variable, not a multi-line recipe string: GNU Make 4.x keeps backslash-newlines inside
+# single quotes, which would put stray backslashes into the JSON.
+TOOL_REQUEST = { "model": "$(PRESET)", \
+	"messages": [{"role": "user", "content": "What is the weather in Paris?"}], \
+	"tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get weather", \
+		"parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}], \
+	"chat_template_kwargs": {"enable_thinking": false} }
+
 tool-check: ## 4. Send one tool-calling request (expect tool_calls with get_weather)
-	@curl -s $(API)/chat/completions -H 'Content-Type: application/json' -d '{ \
-		"model": "$(PRESET)", \
-		"messages": [{"role": "user", "content": "What is the weather in Paris?"}], \
-		"tools": [{"type": "function", "function": {"name": "get_weather", "description": "Get weather", \
-			"parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}}}], \
-		"chat_template_kwargs": {"enable_thinking": false}}' \
+	@curl -s $(API)/chat/completions -H 'Content-Type: application/json' -d '$(TOOL_REQUEST)' \
 	| python3 -c "import json, sys; m = json.load(sys.stdin)['choices'][0]['message']; print('tool_calls:', m.get('tool_calls')); print('content:', m.get('content'))"
 
 eval-smoke: ## 5. One evaluation run against the server (writes results/smoke-<preset>.jsonl)
