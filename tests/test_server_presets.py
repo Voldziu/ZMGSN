@@ -29,6 +29,12 @@ def test_platform_defines_all_presets(platform: str) -> None:
         assert preset["max-model-len"] == 32768
 
 
+def test_cuda_presets_limit_concurrent_sequences() -> None:
+    # vLLM's default (256) exceeds the Mamba cache blocks of the small Qwen3.5 budgets.
+    for name, preset in _presets("cuda").items():
+        assert 1 <= preset["max-num-seqs"] <= 16, name
+
+
 def test_platforms_share_parsers_and_templates() -> None:
     cuda, metal = _presets("cuda"), _presets("metal")
     for name in PRESET_NAMES:
