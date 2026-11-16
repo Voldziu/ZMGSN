@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -15,7 +16,7 @@ from langgraph.errors import GraphRecursionError
 
 from tool_eval.config import Settings, get_settings, use_settings
 from tool_eval.evaluation import runner
-from tool_eval.evaluation.checks import evaluate_review
+from tool_eval.evaluation.checks import CHECKS_VERSION, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.models import (
     CostMetrics,
@@ -89,10 +90,20 @@ def _review_text(count: int = 5) -> str:
     return "\n".join([*lines, "## Bibliography", *references]) + "\n"
 
 
-def _write_review(workspace: Path, text: str) -> None:
+def _write_review(workspace: Path, text: str, *, read: bool = True) -> None:
     target = workspace / "reviews" / "review.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
+    if read:
+        _mark_read(workspace, re.findall(r"arxiv\.org/abs/(\S+)", text))
+
+
+def _mark_read(workspace: Path, arxiv_ids: Sequence[str]) -> None:
+    """Leave the extracted full text the tools would have written for each paper."""
+    for arxiv_id in arxiv_ids:
+        target = workspace / "texts" / f"{arxiv_id}.txt"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("full text", encoding="utf-8")
 
 
 # --- scenarios and prompt ---------------------------------------------------
@@ -138,6 +149,7 @@ def test_valid_review_passes_all_checks(tmp_path: Path) -> None:
     _write_review(tmp_path, _review_text())
     score = evaluate_review(
         tmp_path / "reviews/review.md",
+        workspace=tmp_path,
         scenario=SCENARIO,
         expected_papers=5,
         lookup=_lookup(_papers()),
@@ -149,6 +161,7 @@ def test_valid_review_passes_all_checks(tmp_path: Path) -> None:
 def test_missing_file_fails_every_criterion(tmp_path: Path) -> None:
     score = evaluate_review(
         tmp_path / "reviews/review.md",
+        workspace=tmp_path,
         scenario=SCENARIO,
         expected_papers=5,
         lookup=_lookup({}),
@@ -161,6 +174,7 @@ def test_out_of_window_and_wrong_count_are_detected(tmp_path: Path) -> None:
     _write_review(tmp_path, _review_text(count=4))
     score = evaluate_review(
         tmp_path / "reviews/review.md",
+        workspace=tmp_path,
         scenario=SCENARIO,
         expected_papers=5,
         lookup=_lookup(_papers(published=date(2020, 1, 1))),
@@ -174,11 +188,55 @@ def test_unknown_arxiv_id_is_detected(tmp_path: Path) -> None:
     _write_review(tmp_path, _review_text())
     score = evaluate_review(
         tmp_path / "reviews/review.md",
+        workspace=tmp_path,
         scenario=SCENARIO,
         expected_papers=5,
         lookup=_lookup({}),
     )
     assert "ids_exist" in {c.name for c in score.criteria if not c.passed}
+
+
+def _papers_read(tmp_path: Path) -> CriterionResult:
+    score = evaluate_review(
+        tmp_path / "reviews/review.md",
+        workspace=tmp_path,
+        scenario=SCENARIO,
+        expected_papers=5,
+        lookup=_lookup(_papers()),
+    )
+    return next(c for c in score.criteria if c.name == "papers_read")
+
+
+def test_review_from_search_results_only_fails_papers_read(tmp_path: Path) -> None:
+    _write_review(tmp_path, _review_text(), read=False)
+    criterion = _papers_read(tmp_path)
+    assert not criterion.passed
+    assert all(f"2401.0000{i}" in criterion.detail for i in range(5))
+
+
+def test_one_unread_paper_fails_papers_read(tmp_path: Path) -> None:
+    _write_review(tmp_path, _review_text(), read=False)
+    _mark_read(tmp_path, [f"2401.0000{i}" for i in range(4)])
+    criterion = _papers_read(tmp_path)
+    assert not criterion.passed
+    assert "2401.00004" in criterion.detail
+    assert "2401.00000" not in criterion.detail
+
+
+def test_all_papers_read_passes(tmp_path: Path) -> None:
+    _write_review(tmp_path, _review_text())
+    assert _papers_read(tmp_path).passed
+
+
+def test_pdf_in_shared_cache_only_does_not_count(tmp_path: Path) -> None:
+    _write_review(tmp_path, _review_text(), read=False)
+    cache = tmp_path.parent / "pdf_cache"
+    cache.mkdir(exist_ok=True)
+    for i in range(5):
+        (cache / f"2401.0000{i}.pdf").write_bytes(b"%PDF-1.4")
+        (tmp_path / "papers").mkdir(exist_ok=True)
+        (tmp_path / "papers" / f"2401.0000{i}.pdf").write_bytes(b"%PDF-1.4")
+    assert not _papers_read(tmp_path).passed
 
 
 # --- settings override and cost metering inside a real agent loop -----------
@@ -239,17 +297,18 @@ def test_level3_review_passes_outcome_checks(
 ) -> None:
     papers = _papers()
     monkeypatch.setattr(reports, "search_arxiv", lambda *args, **kwargs: list(papers.values()))
-    monkeypatch.setattr(
-        reports,
-        "summarize_paper",
-        lambda arxiv_id, **kwargs: PaperSummary(
+
+    def fake_summarize(arxiv_id: str, **kwargs: Any) -> PaperSummary:
+        _mark_read(tmp_path, [arxiv_id])  # the real tool extracts the text first
+        return PaperSummary(
             arxiv_id=arxiv_id,
             summary_path="x.md",
             summary="A concise summary that is clearly long enough to count as one.",
             chunks_summarized=1,
             chunks_total=1,
-        ),
-    )
+        )
+
+    monkeypatch.setattr(reports, "summarize_paper", fake_summarize)
     settings = _settings(tmp_path)
     result = reports.conduct_review(
         "demo topic",
@@ -259,6 +318,7 @@ def test_level3_review_passes_outcome_checks(
     assert result.review_path == "reviews/review.md"
     score = evaluate_review(
         tmp_path / result.review_path,
+        workspace=tmp_path,
         scenario=SCENARIO,
         expected_papers=5,
         lookup=_lookup(papers),
@@ -493,8 +553,10 @@ def test_level2_building_blocks_produce_a_passing_review(
     ]
     reports.write_review("\n\n".join(["# Review: demo topic", *sections]), settings=settings)
     reports.append_bibliography([p.arxiv_id for p in cited], settings=settings)
+    _mark_read(tmp_path, [p.arxiv_id for p in cited])
     score = evaluate_review(
         tmp_path / "reviews" / "review.md",
+        workspace=tmp_path,
         scenario=SCENARIO,
         expected_papers=5,
         lookup=_lookup(papers),
@@ -615,3 +677,9 @@ def test_runs_share_an_arxiv_cache_next_to_the_workspaces(
     _patch_agent(monkeypatch, behaviour)
     _run(tmp_path)
     assert seen == [tmp_path / "arxiv_cache"] * 2
+
+
+def test_fingerprint_covers_checks_version(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base = runner.config_fingerprint(_settings(tmp_path))
+    monkeypatch.setattr(runner, "CHECKS_VERSION", CHECKS_VERSION + 1)
+    assert runner.config_fingerprint(_settings(tmp_path)) != base

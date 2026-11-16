@@ -3,10 +3,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from langchain_core.language_models import GenericFakeChatModel
 
 from tool_eval.config import Settings
+from tool_eval.exceptions import ExternalServiceError
 from tool_eval.services import reports
 from tool_eval.services.arxiv import ArxivPaper
+from tool_eval.services.papers import PaperSummary
 from tool_eval.tools.registry import get_tools
 
 PAPERS = {
@@ -68,3 +71,68 @@ def test_rewriting_the_review_drops_the_bibliography(settings: Settings) -> None
     reports.append_bibliography(["2401.00000"], settings=settings)
     reports.write_review("# Review v2", settings=settings)
     assert _review(settings) == "# Review v2\n"
+
+
+# --- level 3: spare candidates ----------------------------------------------------------------
+
+
+def _candidates(count: int) -> list[ArxivPaper]:
+    return [
+        ArxivPaper(
+            arxiv_id=f"2401.000{i:02d}",
+            title=f"Candidate {i}",
+            authors=["Jane Doe"],
+            published=date(2024, 3, 1),
+            abstract="",
+        )
+        for i in range(count)
+    ]
+
+
+def _level3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, found: int, unreadable: set[int]
+) -> tuple[reports.ReviewResult, list[int]]:
+    asked: list[int] = []
+
+    def search(query: str, *, max_results: int, **kwargs: Any) -> list[ArxivPaper]:
+        asked.append(max_results)
+        return _candidates(found)[:max_results]
+
+    def summarize(arxiv_id: str, **kwargs: Any) -> PaperSummary:
+        if int(arxiv_id[-2:]) in unreadable:
+            raise ExternalServiceError(f"The PDF of {arxiv_id} exceeds the 100 MB size limit.")
+        return PaperSummary(
+            arxiv_id=arxiv_id,
+            summary_path=f"summaries/{arxiv_id}.md",
+            summary="A concise summary that is clearly long enough to count as one.",
+            chunks_summarized=1,
+            chunks_total=1,
+        )
+
+    monkeypatch.setattr(reports, "search_arxiv", search)
+    monkeypatch.setattr(reports, "summarize_paper", summarize)
+    settings = Settings(_env_file=None, workspace_dir=tmp_path)
+    result = reports.conduct_review(
+        "demo", settings=settings, llm=GenericFakeChatModel(messages=iter([]))
+    )
+    return result, asked
+
+
+def test_level3_replaces_an_unreadable_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result, asked = _level3(tmp_path, monkeypatch, found=10, unreadable={2})
+    assert asked == [10]
+    assert result.papers_included == 5
+    assert [s.arxiv_id for s in result.papers_skipped] == ["2401.00002"]
+    assert "100 MB" in result.papers_skipped[0].reason
+    text = (tmp_path / reports.REVIEW_PATH).read_text(encoding="utf-8")
+    assert "Candidate 5" in text
+    assert "Candidate 2" not in text
+
+
+def test_level3_reports_a_shortfall(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    result, _ = _level3(tmp_path, monkeypatch, found=6, unreadable={0, 1, 4})
+    assert result.papers_included == 3
+    assert result.papers_requested == 5
+    assert len(result.papers_skipped) == 3

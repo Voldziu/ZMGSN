@@ -15,7 +15,8 @@ def conduct_literature_review(query: str) -> str:
         query: Research topic.
 
     Returns:
-        JSON with the workspace path of the review file and the number of papers included.
+        JSON with the workspace path of the review file, how many papers were requested and
+        included, and the candidates skipped with the reason.
     """
     result = reports.conduct_review(query, settings=get_settings(), llm=get_chat_model())
     return result.model_dump_json()

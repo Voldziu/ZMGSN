@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # One-tool-per-turn models need about 25 calls for a five-paper review; 30 leaves headroom.
     agent_max_steps: int = Field(default=30, ge=1)
     agent_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
-    prompt_version: str = "v1"
+    prompt_version: str = "v2"
 
     # Inclusive submission-date window for arXiv searches; keeps runs reproducible.
     arxiv_date_from: date | None = None
@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     arxiv_cache_dir: Path | None = None
     http_timeout_seconds: float = Field(default=30.0, gt=0)
     max_file_bytes: int = Field(default=20_000_000, gt=0)
+    # Image-heavy arXiv PDFs reach 25-50 MB; text files keep the smaller limit above.
+    max_pdf_bytes: int = Field(default=100_000_000, gt=0)
 
     text_max_chars: int = Field(default=6000, gt=0)
     chunk_size: int = Field(default=3000, gt=400)

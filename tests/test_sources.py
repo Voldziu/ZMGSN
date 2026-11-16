@@ -158,3 +158,92 @@ def test_timeouts_are_retried(monkeypatch: pytest.MonkeyPatch, waits: list[float
     )
     assert _fetch(None)[0].arxiv_id == "2401.00001"
     assert calls == 2
+
+
+# --- PDF downloads --------------------------------------------------------------------------
+
+
+def _serve_pdf(monkeypatch: pytest.MonkeyPatch, response: httpx.Response) -> None:
+    monkeypatch.setattr(
+        pdf,
+        "build_client",
+        lambda *, timeout: httpx.Client(transport=httpx.MockTransport(lambda request: response)),
+    )
+
+
+def test_pdf_limit_defaults_to_100_mb_and_text_limit_stays() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.max_pdf_bytes == 100_000_000
+    assert settings.max_file_bytes == 20_000_000
+
+
+def test_large_pdf_downloads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    body = b"%PDF-1.4" + b"0" * 30_000_000
+    _serve_pdf(monkeypatch, httpx.Response(200, content=body))
+    settings = Settings(_env_file=None, workspace_dir=tmp_path)
+    ref = papers.download_paper_pdf("2312.09754", settings=settings)
+    assert (tmp_path / ref).stat().st_size == len(body)
+
+
+def test_oversized_pdf_names_paper_and_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _serve_pdf(monkeypatch, httpx.Response(200, content=b"%PDF-1.4" + b"0" * 2_000))
+    settings = Settings(_env_file=None, workspace_dir=tmp_path, max_pdf_bytes=1_000)
+    with pytest.raises(ExternalServiceError, match=r"2312\.09754.*0\.001 MB"):
+        papers.download_paper_pdf("2312.09754", settings=settings)
+
+
+def test_declared_size_is_checked_before_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    response = httpx.Response(200, content=b"%PDF-1.4", headers={"Content-Length": "200000000"})
+    _serve_pdf(monkeypatch, response)
+    with pytest.raises(ExternalServiceError, match="2312.09754"):
+        papers.download_paper_pdf(
+            "2312.09754", settings=Settings(_env_file=None, workspace_dir=tmp_path)
+        )
+
+
+def test_missing_pdf_names_paper_and_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _serve_pdf(monkeypatch, httpx.Response(404, text="not found"))
+    with pytest.raises(ExternalServiceError) as caught:
+        papers.download_paper_pdf(
+            "2301.00016", settings=Settings(_env_file=None, workspace_dir=tmp_path)
+        )
+    assert "2301.00016" in str(caught.value)
+    assert "HTTP 404" in str(caught.value)
+
+
+# --- search order ---------------------------------------------------------------------------
+
+
+def test_search_is_sorted_by_relevance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, waits: list[float]
+) -> None:
+    seen: list[httpx.URL] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url)
+        return httpx.Response(200, text=FEED)
+
+    monkeypatch.setattr(
+        arxiv,
+        "build_client",
+        lambda *, timeout: httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    arxiv.search_arxiv(
+        "protein structure prediction",
+        max_results=5,
+        date_from=None,
+        date_to=None,
+        timeout=5,
+        cache_dir=tmp_path,
+    )
+    params = seen[0].params
+    assert params["sortBy"] == "relevance"
+    assert params["sortOrder"] == "descending"
+    old = {**dict(params), "sortBy": "submittedDate"}
+    assert arxiv._cache_key(dict(params)) != arxiv._cache_key(old)

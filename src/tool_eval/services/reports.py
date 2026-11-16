@@ -20,7 +20,18 @@ logger = get_logger(__name__)
 
 # Fixed so every tool level and the evaluation checks agree on where the review lives.
 REVIEW_PATH = "reviews/review.md"
+# Level 3 searches this many candidates per requested paper.
+_CANDIDATE_FACTOR = 2
 _BIBLIOGRAPHY_HEADING = re.compile(r"^##[ \t]+Bibliography[ \t]*$", re.MULTILINE | re.IGNORECASE)
+
+
+class SkippedPaper(BaseModel):
+    """A search candidate the review could not read, and why."""
+
+    model_config = ConfigDict(frozen=True)
+
+    arxiv_id: str
+    reason: str
 
 
 class ReviewResult(BaseModel):
@@ -29,8 +40,9 @@ class ReviewResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     review_path: str
+    papers_requested: int
     papers_included: int
-    papers_failed: list[str]
+    papers_skipped: list[SkippedPaper]
 
 
 class CitedPaper(BaseModel):
@@ -53,7 +65,7 @@ def search_cited_papers(query: str, *, max_results: int, settings: Settings) -> 
         settings: Application settings.
 
     Returns:
-        Papers, newest first.
+        Papers, most relevant first.
     """
     papers = search_arxiv(
         query,
@@ -133,7 +145,11 @@ def write_bibliography(arxiv_ids: Sequence[str], *, output_ref: str, settings: S
 
 
 def conduct_review(query: str, *, settings: Settings, llm: BaseChatModel) -> ReviewResult:
-    """Search arXiv, summarize the top papers and write a Markdown review with a bibliography.
+    """Search arXiv, summarize the top readable papers and write a Markdown review.
+
+    Twice as many candidates as needed are searched; candidates that cannot be read (oversized
+    or missing PDFs) are skipped and replaced by the next ones, so an unread paper never enters
+    the review.
 
     Args:
         query: Research topic.
@@ -147,9 +163,10 @@ def conduct_review(query: str, *, settings: Settings, llm: BaseChatModel) -> Rev
         InvalidInputError: If no papers match the query in the configured date window.
         ExternalServiceError: If none of the found papers could be summarized.
     """
+    # Spare candidates replace papers that cannot be read (oversized or missing PDFs).
     papers = search_arxiv(
         query,
-        max_results=settings.review_paper_count,
+        max_results=_CANDIDATE_FACTOR * settings.review_paper_count,
         date_from=settings.arxiv_date_from,
         date_to=settings.arxiv_date_to,
         timeout=settings.http_timeout_seconds,
@@ -160,13 +177,15 @@ def conduct_review(query: str, *, settings: Settings, llm: BaseChatModel) -> Rev
 
     sections: list[str] = []
     citations: list[str] = []
-    failed: list[str] = []
+    skipped: list[SkippedPaper] = []
     for paper in papers:
+        if len(sections) == settings.review_paper_count:
+            break
         try:
             result = summarize_paper(paper.arxiv_id, settings=settings, llm=llm)
-        except ToolEvalError:
+        except ToolEvalError as exc:
             logger.warning("Could not summarize %s", paper.arxiv_id, exc_info=True)
-            failed.append(paper.arxiv_id)
+            skipped.append(SkippedPaper(arxiv_id=paper.arxiv_id, reason=str(exc)))
             continue
         citation = _citation(paper)
         citations.append(citation)
@@ -186,8 +205,9 @@ def conduct_review(query: str, *, settings: Settings, llm: BaseChatModel) -> Rev
     write_text(dest, content, max_bytes=settings.max_file_bytes)
     return ReviewResult(
         review_path=to_ref(dest, workspace=settings.workspace_dir),
+        papers_requested=settings.review_paper_count,
         papers_included=len(sections),
-        papers_failed=failed,
+        papers_skipped=skipped,
     )
 
 

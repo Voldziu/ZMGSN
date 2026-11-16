@@ -8,6 +8,7 @@ from pathlib import Path
 from tool_eval.evaluation.models import CriterionResult, OutcomeScore, Scenario
 from tool_eval.exceptions import InvalidInputError
 from tool_eval.services.arxiv import ArxivPaper, fetch_arxiv_papers
+from tool_eval.services.papers import paper_file_stem
 
 Lookup = Callable[[Sequence[str]], Mapping[str, ArxivPaper | None]]
 
@@ -28,7 +29,12 @@ CRITERIA = (
     "titles_match",
     "bibliography_matches",
     "no_duplicates",
+    "papers_read",
 )
+
+# Bump whenever a criterion is added or changes meaning; it is part of the run config hash.
+# 2: papers_read (every cited paper's full text was extracted in the run).
+CHECKS_VERSION = 2
 
 
 class ArxivLookup:
@@ -91,12 +97,18 @@ class _Section:
 
 
 def evaluate_review(
-    review_file: Path, *, scenario: Scenario, expected_papers: int, lookup: Lookup
+    review_file: Path,
+    *,
+    workspace: Path,
+    scenario: Scenario,
+    expected_papers: int,
+    lookup: Lookup,
 ) -> OutcomeScore:
     """Check a review file against the scenario; every criterion is always reported.
 
     Args:
         review_file: Path of the Markdown file the agent should have written.
+        workspace: The run's own workspace; `papers_read` looks for extracted texts there.
         scenario: Scenario providing the allowed submission-date window.
         expected_papers: Required number of papers.
         lookup: Resolves arXiv ids to metadata.
@@ -157,8 +169,22 @@ def evaluate_review(
             "Bibliography must list exactly the cited ids",
         ),
         _check("no_duplicates", bool(ids) and len(ids) == len(set(ids)), "papers must be distinct"),
+        _papers_read(ids, workspace),
     ]
     return OutcomeScore.from_criteria(results)
+
+
+def _papers_read(ids: Sequence[str], workspace: Path) -> CriterionResult:
+    # The tools always extract a paper's full text to texts/<stem>.txt in the run workspace
+    # before summarizing it (all levels), so its presence proves the paper was read here.
+    unread = [
+        arxiv_id
+        for arxiv_id in dict.fromkeys(ids)
+        if not (workspace / "texts" / f"{paper_file_stem(arxiv_id)}.txt").is_file()
+    ]
+    if not ids:
+        return _check("papers_read", False, "the review cites no arXiv papers")
+    return _check("papers_read", not unread, f"not read in this run: {', '.join(unread)}")
 
 
 def _check(name: str, passed: bool, detail: str) -> CriterionResult:

@@ -42,7 +42,7 @@ def download_paper_pdf(arxiv_id: str, *, settings: Settings) -> str:
     """
     cleaned = validate_arxiv_id(arxiv_id)
     dest = resolve_in_workspace(
-        f"papers/{_safe_stem(cleaned)}.pdf",
+        f"papers/{paper_file_stem(cleaned)}.pdf",
         workspace=settings.workspace_dir,
     )
     cache = settings.pdf_cache_dir
@@ -52,7 +52,7 @@ def download_paper_pdf(arxiv_id: str, *, settings: Settings) -> str:
             cleaned,
             dest=source,
             timeout=settings.http_timeout_seconds,
-            max_bytes=settings.max_file_bytes,
+            max_bytes=settings.max_pdf_bytes,
         )
     if source != dest:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -226,7 +226,7 @@ def summarize_paper(arxiv_id: str, *, settings: Settings, llm: BaseChatModel) ->
     parts = [summarize_chunk_file(ref, settings=settings, llm=llm) for ref in chunk_refs]
     summary = "\n\n".join(parts)
     dest = resolve_in_workspace(
-        f"summaries/{_safe_stem(cleaned)}.md",
+        f"summaries/{paper_file_stem(cleaned)}.md",
         workspace=settings.workspace_dir,
     )
     write_text(dest, summary, max_bytes=settings.max_file_bytes)
@@ -239,5 +239,13 @@ def summarize_paper(arxiv_id: str, *, settings: Settings, llm: BaseChatModel) ->
     )
 
 
-def _safe_stem(arxiv_id: str) -> str:
+def paper_file_stem(arxiv_id: str) -> str:
+    """File-name stem the tools use for a paper (`papers/<stem>.pdf`, `texts/<stem>.txt`).
+
+    Args:
+        arxiv_id: arXiv identifier.
+
+    Returns:
+        The identifier with `/` (old-style ids) replaced by `_`.
+    """
     return arxiv_id.replace("/", "_")

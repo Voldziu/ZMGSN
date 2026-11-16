@@ -97,3 +97,26 @@ def test_prompt_loading_hash_and_render() -> None:
 def test_prompt_missing_or_unsafe(name: str, version: str) -> None:
     with pytest.raises(PromptNotFoundError):
         load_prompt(name, version)
+
+
+@pytest.mark.parametrize(
+    "name", ["system", "evaluation", "summarize_chunk", "extract_keywords", "translate_text"]
+)
+def test_every_prompt_family_has_v2(name: str) -> None:
+    assert load_prompt(name, "v2").text
+
+
+def test_v2_task_requires_reading_full_text() -> None:
+    task = load_prompt("evaluation", "v2").render(
+        topic="demo", n_papers="5", date_from="2024-01-01", date_to="2024-06-30"
+    )
+    assert "full text" in task
+    assert "abstract does not count" in task
+    assert "full text" in load_prompt("system", "v2").text
+
+
+def test_prompt_version_defaults_to_v2(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tool_eval.config import Settings
+
+    monkeypatch.delenv("PROMPT_VERSION", raising=False)
+    assert Settings(_env_file=None).prompt_version == "v2"

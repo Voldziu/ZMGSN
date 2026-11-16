@@ -2,22 +2,22 @@
 
 ## 1. Reading requirement and `papers_read`
 
-- [ ] 1.1 Add `system/v2.md` (v1 plus a rule to base summaries on the full text obtained with the tools) and `evaluation/v2.md` (each summary must come from the paper's full text, never from search results or abstracts). Make `v2` the `prompt_version` default. Verify with a test that the rendered v2 task states the requirement and that both v2 prompts load.
-- [ ] 1.2 Add the `papers_read` criterion to `checks.py`. It passes only if every cited ID has `texts/<safe-stem(id)>.txt` in the run workspace, and its detail lists the unread IDs. Pass the workspace into `evaluate_review` from `run_single`. Verify with tests for:
+- [x] 1.1 Add `system/v2.md` (v1 plus a rule to base summaries on the full text obtained with the tools) and `evaluation/v2.md` (each summary must come from the paper's full text, never from search results or abstracts). Because the tool prompts (`summarize_chunk`, `extract_keywords`, `translate_text`) load with the same `prompt_version`, add their `v2.md` as unchanged copies of v1. Make `v2` the `prompt_version` default. Verify with tests that the rendered v2 task states the requirement and that every prompt family loads in v2.
+- [x] 1.2 Add the `papers_read` criterion to `checks.py`. It passes only if every cited ID has `texts/<safe-stem(id)>.txt` in the run workspace, and its detail lists the unread IDs. Pass the workspace into `evaluate_review` from `run_single`. Verify with tests for:
   - no papers read;
   - one paper missing;
   - all read;
   - a PDF present only in the shared cache.
-- [ ] 1.3 Add `CHECKS_VERSION = 2` and include it in `config_fingerprint`. Verify with a test that the fingerprint changes with the checks version.
+- [x] 1.3 Add `CHECKS_VERSION = 2` and include it in `config_fingerprint`. Verify with a test that the fingerprint changes with the checks version.
 
 ## 2. PDFs and level-3 candidates
 
-- [ ] 2.1 Add the `max_pdf_bytes` setting (default 100 MB) and use it in `download_paper_pdf`/`download_arxiv_pdf`; text files keep `max_file_bytes`. Check `Content-Length` before streaming. Verify with tests: a 30 MB mocked PDF downloads; a PDF over the limit fails naming the ID and limit; a 404 fails naming the ID and status.
-- [ ] 2.2 In `conduct_review`, search `2 × review_paper_count` candidates and fill the review with read papers in search order, reporting skipped IDs with reasons in `ReviewResult` and never including an unread paper. Verify with tests: one failing candidate still yields 5 sections, and too few readable candidates yields only the read ones with the shortfall reported.
+- [x] 2.1 Add the `max_pdf_bytes` setting (default 100 MB) and use it in `download_paper_pdf`/`download_arxiv_pdf`; text files keep `max_file_bytes`. Check `Content-Length` before streaming. Verify with tests: a 30 MB mocked PDF downloads; a PDF over the limit fails naming the ID and limit; a 404 fails naming the ID and status.
+- [x] 2.2 In `conduct_review`, search `2 × review_paper_count` candidates and fill the review with read papers in search order, reporting skipped IDs with reasons in `ReviewResult` and never including an unread paper. Verify with tests: one failing candidate still yields 5 sections, and too few readable candidates yields only the read ones with the shortfall reported.
 
 ## 3. arXiv relevance order
 
-- [ ] 3.1 Send `sortBy=relevance` in `search_arxiv`, keeping the date window. Verify with a test on the request parameters, and that the cache key differs from the old date-sorted query.
+- [x] 3.1 Send `sortBy=relevance` in `search_arxiv`, keeping the date window. Verify with a test on the request parameters, and that the cache key differs from the old date-sorted query.
 
 ## 4. Agent limits and arguments
 

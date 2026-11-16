@@ -12,7 +12,7 @@ from tool_eval.services import arxiv, wikipedia
 
 @tool(parse_docstring=True)
 def search_arxiv(query: str, max_results: Annotated[int, Field(ge=1, le=10)] = 5) -> str:
-    """Search arXiv for recent papers on a topic, newest first.
+    """Search arXiv for papers on a topic, most relevant first.
 
     Args:
         query: Keywords describing the topic.

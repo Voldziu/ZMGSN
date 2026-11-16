@@ -56,6 +56,7 @@ Relevant current state:
 ### Prompt v2 for both system and evaluation prompts
 - `evaluation/v2.md` adds that each summary must be based on the paper's full text obtained with the tools, never on search results or abstracts.
 - `system/v2.md` is v1 plus one rule saying the same.
+- The tool prompts (`summarize_chunk`, `extract_keywords`, `translate_text`) are loaded with the same `prompt_version`, so they get `v2.md` files identical to v1. Their behaviour does not change.
 - The `prompt_version` default becomes `v2`. `CHECKS_VERSION = 2` in `checks.py` joins `config_fingerprint`.
 
 *Alternative:* add only the criterion without changing the prompt. Rejected, because it would penalise models for a requirement the task never stated.
@@ -69,6 +70,7 @@ Relevant current state:
 - `conduct_review` searches `2 × review_paper_count` candidates and takes them in search order until `review_paper_count` are summarised.
 - `ReviewResult` reports the skipped IDs with their reasons.
 - The tool never includes an unread paper.
+- This changes the level-3 tool's behaviour and output, so `TOOLSET_VERSION` becomes 3.
 
 ### Relevance-sorted arXiv search
 - `search_arxiv` sends `sortBy=relevance` (the descending sort order stays). The date window filter is unchanged.

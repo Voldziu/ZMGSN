@@ -14,7 +14,7 @@ from langgraph.errors import GraphRecursionError
 
 from tool_eval.agent import build_agent, run_task
 from tool_eval.config import Settings, use_settings
-from tool_eval.evaluation.checks import Lookup, evaluate_review
+from tool_eval.evaluation.checks import CHECKS_VERSION, Lookup, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
@@ -43,6 +43,7 @@ def config_fingerprint(settings: Settings) -> str:
         "max_steps": settings.agent_max_steps,
         "parallel_tool_calls": settings.effective_parallel_tool_calls,
         "toolset_version": TOOLSET_VERSION,
+        "checks_version": CHECKS_VERSION,
         "prompt_version": settings.prompt_version,
         "system_prompt": load_prompt("system", settings.prompt_version).sha256,
         "task_prompt": load_prompt("evaluation", settings.prompt_version).sha256,
@@ -200,6 +201,7 @@ def run_single(
         try:
             outcome = evaluate_review(
                 workspace / REVIEW_PATH,
+                workspace=workspace,
                 scenario=scenario,
                 expected_papers=run_settings.review_paper_count,
                 lookup=lookup,

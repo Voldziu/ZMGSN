@@ -30,15 +30,22 @@ def download_arxiv_pdf(arxiv_id: str, *, dest: Path, timeout: float, max_bytes: 
         ExternalServiceError: If the download fails, is too large or is not a PDF.
     """
     url = _PDF_URL.format(arxiv_id=validate_arxiv_id(arxiv_id))
+    too_large = f"The PDF of {arxiv_id} exceeds the {max_bytes / 1_000_000:g} MB size limit."
     body = bytearray()
     try:
         with build_client(timeout=timeout) as client, client.stream("GET", url) as response:
             response.raise_for_status()
+            declared = response.headers.get("Content-Length", "")
+            if declared.isdigit() and int(declared) > max_bytes:
+                raise ExternalServiceError(too_large)
             for block in response.iter_bytes():
                 body.extend(block)
                 if len(body) > max_bytes:
-                    msg = "PDF exceeds the size limit."
-                    raise ExternalServiceError(msg)
+                    raise ExternalServiceError(too_large)
+    except httpx.HTTPStatusError as exc:
+        logger.warning("PDF download failed for %s: %s", arxiv_id, exc)
+        msg = f"arXiv returned HTTP {exc.response.status_code} for the PDF of {arxiv_id}."
+        raise ExternalServiceError(msg) from exc
     except httpx.HTTPError as exc:
         logger.warning("PDF download failed for %s: %s", arxiv_id, exc)
         msg = f"Could not download the PDF for {arxiv_id}."

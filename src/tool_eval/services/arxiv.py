@@ -77,7 +77,7 @@ def search_arxiv(
     timeout: float,
     cache_dir: Path | None = None,
 ) -> list[ArxivPaper]:
-    """Search arXiv, newest submissions first, optionally within a submission-date window.
+    """Search arXiv, most relevant first, optionally within a submission-date window.
 
     Args:
         query: Free-text keywords.
@@ -106,7 +106,8 @@ def search_arxiv(
     params = {
         "search_query": search_query,
         "max_results": str(max_results),
-        "sortBy": "submittedDate",
+        # Most relevant first; the date window above already limits submissions.
+        "sortBy": "relevance",
         "sortOrder": "descending",
     }
     return _request(params, timeout=timeout, cache_dir=cache_dir)
