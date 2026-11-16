@@ -30,6 +30,9 @@ def build_chat_model(settings: Settings) -> ChatOpenAI:
         api_key=settings.llm_api_key,
         temperature=settings.agent_temperature,
         max_completion_tokens=settings.llm_max_tokens,
+        # vLLM otherwise samples deterministically from server start, so repeat n of a session
+        # would reproduce exactly after every restart.
+        seed=settings.llm_seed,
         extra_body=extra_body,
     )
 

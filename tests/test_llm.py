@@ -63,3 +63,11 @@ def test_other_presets_leave_parallel_calls_to_server() -> None:
     body = build_chat_model(Settings(_env_file=None, llm_model="qwen")).extra_body
     assert body is not None
     assert "parallel_tool_calls" not in body
+
+
+def test_seed_is_sent_when_set() -> None:
+    assert build_chat_model(Settings(_env_file=None, llm_seed=1234)).seed == 1234
+
+
+def test_no_seed_by_default() -> None:
+    assert build_chat_model(Settings(_env_file=None)).seed is None

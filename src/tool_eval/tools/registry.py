@@ -7,6 +7,11 @@ from langchain_core.tools import BaseTool
 from tool_eval.exceptions import InvalidInputError
 from tool_eval.tools import level1, level2, level3
 
+# Bump whenever a level's tools change in a way that changes results; it is part of the run
+# config hash, so runs made with different tool definitions are never treated as comparable.
+# 2: level 2 writes the review with write_review (overwrite) instead of append_to_review.
+TOOLSET_VERSION = 2
+
 TOOLSETS: Mapping[str, Sequence[BaseTool]] = {
     "level1": level1.TOOLS,
     "level2": level2.TOOLS,

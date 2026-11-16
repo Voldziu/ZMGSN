@@ -57,7 +57,8 @@ def extract_pdf_text(path: Path) -> str:
         path: PDF file.
 
     Returns:
-        Page texts joined by blank lines; empty if the PDF has no text layer.
+        Page texts joined by blank lines, always valid UTF-8 (unencodable characters such as lone
+        surrogates become `?`); empty if the PDF has no text layer.
 
     Raises:
         InvalidInputError: If the file is missing or cannot be parsed as a PDF.
@@ -67,7 +68,9 @@ def extract_pdf_text(path: Path) -> str:
         raise InvalidInputError(msg)
     try:
         reader = PdfReader(path)
-        return "\n\n".join((page.extract_text() or "").strip() for page in reader.pages).strip()
+        text = "\n\n".join((page.extract_text() or "").strip() for page in reader.pages).strip()
     except (PyPdfError, ValueError, OSError) as exc:
         msg = f"Could not read PDF: {path.name}"
         raise InvalidInputError(msg) from exc
+    # pypdf can emit lone UTF-16 surrogates for unmapped glyphs; they cannot be written as UTF-8.
+    return text.encode("utf-8", "replace").decode("utf-8")

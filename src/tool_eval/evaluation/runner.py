@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+import secrets
 import shutil
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -19,6 +20,7 @@ from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scen
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.prompts import load_prompt
 from tool_eval.services.reports import REVIEW_PATH
+from tool_eval.tools.registry import TOOLSET_VERSION
 from tool_eval.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,6 +42,7 @@ def config_fingerprint(settings: Settings) -> str:
         "temperature": settings.agent_temperature,
         "max_steps": settings.agent_max_steps,
         "parallel_tool_calls": settings.effective_parallel_tool_calls,
+        "toolset_version": TOOLSET_VERSION,
         "prompt_version": settings.prompt_version,
         "system_prompt": load_prompt("system", settings.prompt_version).sha256,
         "task_prompt": load_prompt("evaluation", settings.prompt_version).sha256,
@@ -49,6 +52,19 @@ def config_fingerprint(settings: Settings) -> str:
         "pipeline_max_chunks": settings.pipeline_max_chunks,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def arxiv_cache_dir(settings: Settings, runs_dir: Path) -> Path:
+    """Directory of the shared arXiv response cache for an evaluation.
+
+    Args:
+        settings: Base settings; an explicit `arxiv_cache_dir` wins.
+        runs_dir: Directory holding the run workspaces.
+
+    Returns:
+        `settings.arxiv_cache_dir`, else `arxiv_cache` next to `runs_dir`.
+    """
+    return settings.arxiv_cache_dir or runs_dir.parent / "arxiv_cache"
 
 
 def run_evaluation(
@@ -141,8 +157,10 @@ def run_single(
         update={
             "workspace_dir": workspace,
             "pdf_cache_dir": settings.pdf_cache_dir or runs_dir.parent / "pdf_cache",
+            "arxiv_cache_dir": arxiv_cache_dir(settings, runs_dir),
             "arxiv_date_from": scenario.date_from,
             "arxiv_date_to": scenario.date_to,
+            "llm_seed": secrets.randbelow(2**31),
         },
     )
     system_prompt = load_prompt("system", run_settings.prompt_version)
@@ -209,6 +227,7 @@ def run_single(
         text_max_chars=run_settings.text_max_chars,
         pipeline_max_chunks=run_settings.pipeline_max_chunks,
         config_sha256=config_fingerprint(run_settings),
+        seed=run_settings.llm_seed,
         date_from=scenario.date_from,
         date_to=scenario.date_to,
         started_at=started_at,

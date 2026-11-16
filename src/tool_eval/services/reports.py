@@ -1,5 +1,6 @@
 """Report generation: bibliographies and end-to-end literature reviews."""
 
+import re
 from collections.abc import Sequence
 from datetime import date
 
@@ -13,12 +14,13 @@ from tool_eval.services.formatting import format_apa_citation
 from tool_eval.services.papers import summarize_paper
 from tool_eval.utils.logger import get_logger
 from tool_eval.utils.paths import require_text_suffix, resolve_in_workspace, to_ref
-from tool_eval.utils.text import append_text, write_text
+from tool_eval.utils.text import read_text, write_text
 
 logger = get_logger(__name__)
 
 # Fixed so every tool level and the evaluation checks agree on where the review lives.
 REVIEW_PATH = "reviews/review.md"
+_BIBLIOGRAPHY_HEADING = re.compile(r"^##[ \t]+Bibliography[ \t]*$", re.MULTILINE | re.IGNORECASE)
 
 
 class ReviewResult(BaseModel):
@@ -71,23 +73,26 @@ def search_cited_papers(query: str, *, max_results: int, settings: Settings) -> 
     ]
 
 
-def append_to_review(markdown: str, *, settings: Settings) -> str:
-    """Append Markdown to the review file, creating it if needed.
+def write_review(markdown: str, *, settings: Settings) -> str:
+    """Replace the review file with `markdown`, creating it if needed.
 
     Args:
-        markdown: Text to append.
+        markdown: The complete review.
         settings: Application settings.
 
     Returns:
         Workspace-relative path of the review file.
     """
     dest = resolve_in_workspace(REVIEW_PATH, workspace=settings.workspace_dir)
-    append_text(dest, markdown.rstrip() + "\n\n", max_bytes=settings.max_file_bytes)
+    write_text(dest, markdown.rstrip() + "\n", max_bytes=settings.max_file_bytes)
     return to_ref(dest, workspace=settings.workspace_dir)
 
 
 def append_bibliography(arxiv_ids: Sequence[str], *, settings: Settings) -> str:
-    """Append a `## Bibliography` section with sorted APA references to the review file.
+    """Write the `## Bibliography` section (sorted APA references) at the end of the review.
+
+    An existing bibliography section, from its heading to the end of the file, is replaced, so
+    calling this again never produces a second section; the text before it is kept.
 
     Args:
         arxiv_ids: arXiv identifiers.
@@ -99,7 +104,12 @@ def append_bibliography(arxiv_ids: Sequence[str], *, settings: Settings) -> str:
     papers = fetch_arxiv_papers(arxiv_ids, timeout=settings.http_timeout_seconds)
     entries = sorted(_citation(paper) for paper in papers)
     section = "## Bibliography\n\n" + "\n".join(f"- {entry}" for entry in entries)
-    return append_to_review(section, settings=settings)
+    dest = resolve_in_workspace(REVIEW_PATH, workspace=settings.workspace_dir)
+    body = ""
+    if dest.is_file():
+        existing = read_text(dest, max_bytes=settings.max_file_bytes)
+        body = _BIBLIOGRAPHY_HEADING.split(existing, maxsplit=1)[0].rstrip()
+    return write_review(f"{body}\n\n{section}" if body else section, settings=settings)
 
 
 def write_bibliography(arxiv_ids: Sequence[str], *, output_ref: str, settings: Settings) -> str:

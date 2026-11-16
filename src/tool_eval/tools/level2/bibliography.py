@@ -22,7 +22,9 @@ def generate_bibliography(arxiv_ids: list[str], output_path: str = "bibliography
 
 @tool(parse_docstring=True)
 def append_bibliography(arxiv_ids: list[str]) -> str:
-    """Append a "## Bibliography" section with alphabetical APA references to reviews/review.md.
+    """Write the "## Bibliography" section (alphabetical APA references) into reviews/review.md.
+
+    The section goes at the end of the review and replaces an earlier bibliography section.
 
     Args:
         arxiv_ids: arXiv identifiers of the reviewed papers.

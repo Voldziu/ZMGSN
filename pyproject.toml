@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "defusedxml>=0.7.1",
+    "fonttools>=4.55",
     "httpx>=0.28.1",
     "langchain>=1.4.4",
     "langchain-openai>=1.7.0",

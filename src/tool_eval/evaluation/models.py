@@ -121,6 +121,8 @@ class RunRecord(BaseModel):
     pipeline_max_chunks: int | None = None
     # Hash of the settings above that change results; differing hashes are not comparable.
     config_sha256: str = ""
+    # Sampling seed of the run; deliberately not part of config_sha256.
+    seed: int | None = None
     date_from: date
     date_to: date
     started_at: datetime

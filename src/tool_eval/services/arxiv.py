@@ -1,16 +1,22 @@
 """arXiv search and metadata lookup via the public Atom API."""
 
+import hashlib
+import os
+import random
 import re
+import tempfile
 import threading
 import time
 from collections.abc import Sequence
 from datetime import date
+from pathlib import Path
 from xml.etree.ElementTree import Element
 
 import httpx
 from defusedxml import ElementTree
 from pydantic import BaseModel, ConfigDict
 
+from tool_eval.config import get_settings
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.services.http import build_client
 from tool_eval.utils.logger import get_logger
@@ -20,6 +26,10 @@ logger = get_logger(__name__)
 _API_URL = "https://export.arxiv.org/api/query"
 _ATOM = "{http://www.w3.org/2005/Atom}"
 _MIN_INTERVAL_SECONDS = 3.0  # arXiv API usage policy
+_MAX_ATTEMPTS = 5
+_BACKOFF_SECONDS = (5.0, 10.0, 20.0, 40.0)  # waits before attempts 2..5 without Retry-After
+_RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+_sleep = time.sleep  # patched in tests
 _ID_PATTERN = re.compile(r"(\d{4}\.\d{4,5}|[a-z-]+(\.[A-Z]{2})?/\d{7})(v\d+)?")
 _VERSION_SUFFIX = re.compile(r"v\d+$")
 
@@ -65,6 +75,7 @@ def search_arxiv(
     date_from: date | None,
     date_to: date | None,
     timeout: float,
+    cache_dir: Path | None = None,
 ) -> list[ArxivPaper]:
     """Search arXiv, newest submissions first, optionally within a submission-date window.
 
@@ -74,6 +85,7 @@ def search_arxiv(
         date_from: Earliest submission date (inclusive), or `None`.
         date_to: Latest submission date (inclusive), or `None`.
         timeout: HTTP timeout in seconds.
+        cache_dir: On-disk response cache; defaults to the active settings' `arxiv_cache_dir`.
 
     Returns:
         Matching papers, possibly empty.
@@ -97,15 +109,18 @@ def search_arxiv(
         "sortBy": "submittedDate",
         "sortOrder": "descending",
     }
-    return _request(params, timeout=timeout)
+    return _request(params, timeout=timeout, cache_dir=cache_dir)
 
 
-def fetch_arxiv_papers(arxiv_ids: Sequence[str], *, timeout: float) -> list[ArxivPaper]:
+def fetch_arxiv_papers(
+    arxiv_ids: Sequence[str], *, timeout: float, cache_dir: Path | None = None
+) -> list[ArxivPaper]:
     """Look up metadata for specific arXiv identifiers.
 
     Args:
         arxiv_ids: Identifiers to look up.
         timeout: HTTP timeout in seconds.
+        cache_dir: On-disk response cache; defaults to the active settings' `arxiv_cache_dir`.
 
     Returns:
         Papers found, in arXiv's order.
@@ -118,7 +133,11 @@ def fetch_arxiv_papers(arxiv_ids: Sequence[str], *, timeout: float) -> list[Arxi
     if not ids:
         msg = "At least one arXiv identifier is required."
         raise InvalidInputError(msg)
-    papers = _request({"id_list": ",".join(ids), "max_results": str(len(ids))}, timeout=timeout)
+    papers = _request(
+        {"id_list": ",".join(ids), "max_results": str(len(ids))},
+        timeout=timeout,
+        cache_dir=cache_dir,
+    )
     found = {paper.arxiv_id for paper in papers}
     missing = [item for item in ids if _VERSION_SUFFIX.sub("", item) not in found]
     if missing:
@@ -127,17 +146,64 @@ def fetch_arxiv_papers(arxiv_ids: Sequence[str], *, timeout: float) -> list[Arxi
     return papers
 
 
-def _request(params: dict[str, str], *, timeout: float) -> list[ArxivPaper]:
-    _throttle()
-    try:
-        with build_client(timeout=timeout) as client:
-            response = client.get(_API_URL, params=params)
-            response.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning("arXiv request failed: %s", exc)
-        msg = "arXiv request failed."
-        raise ExternalServiceError(msg) from exc
-    return _parse_feed(response.text)
+def _request(params: dict[str, str], *, timeout: float, cache_dir: Path | None) -> list[ArxivPaper]:
+    """Answer from the on-disk cache, or ask arXiv (spaced, with retries) and cache the result."""
+    directory = cache_dir if cache_dir is not None else get_settings().arxiv_cache_dir
+    cache_file = directory / f"{_cache_key(params)}.xml" if directory is not None else None
+    if cache_file is not None and cache_file.is_file():
+        return _parse_feed(cache_file.read_text(encoding="utf-8"))
+    xml_text = _fetch_with_retries(params, timeout=timeout)
+    papers = _parse_feed(xml_text)  # raises on error entries, so failures are never cached
+    if cache_file is not None:
+        _write_atomically(cache_file, xml_text)
+    return papers
+
+
+def _fetch_with_retries(params: dict[str, str], *, timeout: float) -> str:
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        _throttle()
+        retry_after: float | None = None
+        try:
+            with build_client(timeout=timeout) as client:
+                response = client.get(_API_URL, params=params)
+            if response.status_code not in _RETRY_STATUSES:
+                response.raise_for_status()
+                return response.text
+            reason = f"HTTP {response.status_code}"
+            retry_after = _retry_after_seconds(response)
+        except httpx.HTTPStatusError as exc:
+            logger.warning("arXiv request failed: %s", exc)
+            msg = f"arXiv request failed (HTTP {exc.response.status_code})."
+            raise ExternalServiceError(msg) from exc
+        except httpx.TransportError as exc:  # timeouts and connection errors
+            reason = type(exc).__name__
+        if attempt == _MAX_ATTEMPTS:
+            logger.warning("arXiv request failed after %d attempts: %s", attempt, reason)
+            break
+        wait = retry_after if retry_after is not None else _BACKOFF_SECONDS[attempt - 1]
+        wait += random.uniform(0, 1)  # noqa: S311 - jitter, not security
+        logger.warning("arXiv request failed (%s); retrying in %.0f s", reason, wait)
+        _sleep(wait)
+    msg = f"arXiv request failed after {_MAX_ATTEMPTS} attempts."
+    raise ExternalServiceError(msg)
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    value = response.headers.get("Retry-After", "")
+    return float(value) if value.strip().isdigit() else None
+
+
+def _cache_key(params: dict[str, str]) -> str:
+    canonical = "&".join(f"{key}={params[key]}" for key in sorted(params))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _write_atomically(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    Path(tmp).replace(path)
 
 
 def _throttle() -> None:
@@ -145,7 +211,7 @@ def _throttle() -> None:
     with _throttle_lock:
         wait = _MIN_INTERVAL_SECONDS - (time.monotonic() - _last_request_at)
         if wait > 0:
-            time.sleep(wait)
+            _sleep(wait)
         _last_request_at = time.monotonic()
 
 

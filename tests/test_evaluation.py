@@ -29,12 +29,13 @@ from tool_eval.evaluation.report import load_records, render_markdown, summarize
 from tool_eval.evaluation.runner import run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
+from tool_eval.llm import get_chat_model
 from tool_eval.main import main
 from tool_eval.prompts import load_prompt
 from tool_eval.services import reports
 from tool_eval.services.arxiv import ArxivPaper
 from tool_eval.services.papers import PaperSummary, split_paper_text
-from tool_eval.tools.registry import get_tools
+from tool_eval.tools.registry import TOOLSET_VERSION, get_tools
 
 SCENARIO = Scenario(
     id="demo",
@@ -467,7 +468,7 @@ def test_cli_report_prints_and_rejects_missing_file(
 def test_every_level_can_search_summarize_and_write() -> None:
     required = {
         "level1": {"search_arxiv", "summarize_chunk", "append_to_file"},
-        "level2": {"search_papers", "get_and_summarize_paper", "append_to_review"},
+        "level2": {"search_papers", "get_and_summarize_paper", "write_review"},
         "level3": {"conduct_literature_review"},
     }
     for level, names in required.items():
@@ -485,13 +486,12 @@ def test_level2_building_blocks_produce_a_passing_review(
     cited = reports.search_cited_papers("demo topic", max_results=5, settings=settings)
     assert cited[0].apa_citation.endswith("https://arxiv.org/abs/2401.00000")
 
-    reports.append_to_review("# Review: demo topic", settings=settings)
-    for number, paper in enumerate(cited, start=1):
-        reports.append_to_review(
-            f"## {number}. {paper.title}\n\n{paper.apa_citation}\n\n"
-            "This paper studies the topic and reports clear, reproducible results.",
-            settings=settings,
-        )
+    sections = [
+        f"## {number}. {paper.title}\n\n{paper.apa_citation}\n\n"
+        "This paper studies the topic and reports clear, reproducible results."
+        for number, paper in enumerate(cited, start=1)
+    ]
+    reports.write_review("\n\n".join(["# Review: demo topic", *sections]), settings=settings)
     reports.append_bibliography([p.arxiv_id for p in cited], settings=settings)
     score = evaluate_review(
         tmp_path / "reviews" / "review.md",
@@ -572,3 +572,46 @@ def test_fingerprint_covers_step_limit_and_parallel_policy(
     base = fingerprint()
     assert fingerprint(agent_max_steps=10) != base
     assert fingerprint(llm_parallel_tool_calls=False) != base
+
+
+def test_fingerprint_covers_toolset_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = runner.config_fingerprint(_settings(tmp_path))
+    monkeypatch.setattr(runner, "TOOLSET_VERSION", TOOLSET_VERSION + 1)
+    assert runner.config_fingerprint(_settings(tmp_path)) != base
+
+
+def test_each_run_gets_its_own_recorded_seed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[int | None] = []
+
+    def behaviour() -> None:
+        # A tool-internal model built inside the run sees the run's seed.
+        seen.append(get_chat_model().seed)
+        _write_review(get_settings().workspace_dir, _review_text())
+
+    _patch_agent(monkeypatch, behaviour)
+    _, output = _run(tmp_path, repeats=2)
+
+    records = load_records(output)
+    seeds = [r.seed for r in records]
+    assert all(isinstance(s, int) for s in seeds)
+    assert len(set(seeds)) == len(seeds)
+    assert seen == seeds
+    assert len({r.config_sha256 for r in records}) == 1
+
+
+def test_runs_share_an_arxiv_cache_next_to_the_workspaces(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[Path | None] = []
+
+    def behaviour() -> None:
+        seen.append(get_settings().arxiv_cache_dir)
+        _write_review(get_settings().workspace_dir, _review_text())
+
+    _patch_agent(monkeypatch, behaviour)
+    _run(tmp_path)
+    assert seen == [tmp_path / "arxiv_cache"] * 2

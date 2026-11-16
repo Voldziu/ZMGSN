@@ -52,6 +52,10 @@ make eval-presets PRESETS="llama gemma" REPEATS=10 ONLY= LEVELS="level1 level2 l
 
 Results go to `results/presets-<preset>.jsonl`; running the same command again resumes unfinished runs (delete the file to start over). Server logs: `logs/server-<preset>.log`.
 
+Each run draws a fresh random sampling seed, sends it with every model request of the run (including those made inside tools) and stores it as `seed` in its record. Without it, vLLM samples deterministically from server start, so repeat *n* would come out identical after every restart. The seed is not part of `config_sha256`, so repeats stay comparable.
+
+arXiv API responses (searches and ID lookups, including the evaluation's own checks) are cached on disk in `arxiv_cache/` next to the runs directory (`workspace/arxiv_cache` by default; `ARXIV_CACHE_DIR` overrides it). Every model and repeat therefore sees the same search results, and arXiv is asked only once per query. Requests are spaced 3 s apart and retried on 429, 5xx and timeouts (up to 5 attempts, honouring `Retry-After`). Delete the directory to fetch fresh results.
+
 Single runs against a server you started yourself:
 
 ```sh

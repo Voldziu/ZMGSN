@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     llm_enable_thinking: bool = False
     # Unset: preset default (see SINGLE_TOOL_CALL_PRESETS). False asks for one tool call per reply.
     llm_parallel_tool_calls: bool | None = None
+    # Sampling seed sent with every request; the evaluation runner draws a fresh one per run.
+    llm_seed: int | None = None
 
     # One-tool-per-turn models need about 25 calls for a five-paper review; 30 leaves headroom.
     agent_max_steps: int = Field(default=30, ge=1)
@@ -46,6 +48,8 @@ class Settings(BaseSettings):
     workspace_dir: Path = Path("workspace")
     # Shared download cache so repeated runs do not hit arXiv again; disabled when unset.
     pdf_cache_dir: Path | None = None
+    # Shared cache of arXiv API responses (search and id lookups); disabled when unset.
+    arxiv_cache_dir: Path | None = None
     http_timeout_seconds: float = Field(default=30.0, gt=0)
     max_file_bytes: int = Field(default=20_000_000, gt=0)
 

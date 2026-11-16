@@ -34,13 +34,15 @@ CRITERIA = (
 class ArxivLookup:
     """Looks up arXiv metadata by id and remembers answers across runs."""
 
-    def __init__(self, *, timeout: float) -> None:
+    def __init__(self, *, timeout: float, cache_dir: Path | None = None) -> None:
         """Create an empty cache.
 
         Args:
             timeout: HTTP timeout in seconds.
+            cache_dir: On-disk arXiv response cache shared with the tools, or `None`.
         """
         self._timeout = timeout
+        self._cache_dir = cache_dir
         self._cache: dict[str, ArxivPaper | None] = {}
 
     def __call__(self, ids: Sequence[str]) -> Mapping[str, ArxivPaper | None]:
@@ -58,7 +60,9 @@ class ArxivLookup:
         unknown = [item for item in dict.fromkeys(ids) if item not in self._cache]
         if unknown:
             try:
-                for paper in fetch_arxiv_papers(unknown, timeout=self._timeout):
+                for paper in fetch_arxiv_papers(
+                    unknown, timeout=self._timeout, cache_dir=self._cache_dir
+                ):
                     self._cache[paper.arxiv_id] = paper
             except InvalidInputError:
                 # At least one id is missing; ask one by one to find out which.
@@ -70,7 +74,9 @@ class ArxivLookup:
 
     def _fetch_single(self, arxiv_id: str) -> ArxivPaper | None:
         try:
-            return fetch_arxiv_papers([arxiv_id], timeout=self._timeout)[0]
+            return fetch_arxiv_papers([arxiv_id], timeout=self._timeout, cache_dir=self._cache_dir)[
+                0
+            ]
         except InvalidInputError:
             return None
 

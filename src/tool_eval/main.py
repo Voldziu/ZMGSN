@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from tool_eval.config import get_settings
 from tool_eval.evaluation.checks import ArxivLookup
 from tool_eval.evaluation.report import load_records, render_markdown
-from tool_eval.evaluation.runner import run_evaluation
+from tool_eval.evaluation.runner import arxiv_cache_dir, run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
 from tool_eval.exceptions import InvalidInputError
 from tool_eval.tools.registry import TOOLSETS
@@ -75,7 +75,10 @@ def _run(args: argparse.Namespace) -> int:
         output=args.output,
         runs_dir=args.runs_dir,
         settings=settings,
-        lookup=ArxivLookup(timeout=settings.http_timeout_seconds),
+        lookup=ArxivLookup(
+            timeout=settings.http_timeout_seconds,
+            cache_dir=arxiv_cache_dir(settings, args.runs_dir),
+        ),
     )
     logger.info("Executed %d runs; results in %s", executed, args.output)
     return 0
