@@ -9,6 +9,43 @@ uv sync
 cp .env.example .env
 ```
 
+## Quick start: run an evaluation
+
+1. **Model server, one-time setup.**
+   - **macOS (Apple Silicon):** run `make mac-install`.
+   - **Linux, or Windows with WSL 2 and an NVIDIA GPU:** meet the host prerequisites under [Model server](#model-server) (driver ≥ 580, NVIDIA Container Toolkit, `docker` group).
+
+   You don't start a model yourself: `make eval-presets` starts and stops each one.
+2. **Tracing (optional, recommended):**
+   ```sh
+   make mlflow-up
+   export MLFLOW_TRACKING_URI=http://localhost:5050
+   ```
+   On a WSL host, open the UI from Windows at the same address.
+3. **Run:**
+   ```sh
+   make eval-presets PRESETS=qwen REPEATS=1                                              # quick check
+   make eval-presets PRESETS="qwen llama gemma" REPEATS=1 ONLY= LEVELS="level1 level2 level3"   # all scenarios
+   ```
+4. **Results:**
+   - a per-level summary is printed after each model;
+   - records go to `results/presets-<model>.jsonl`;
+   - reviews go to `workspace/preset-runs/<model>/`;
+   - with tracing on, every run and trace is at `http://localhost:5050`.
+
+Notes:
+- **One model at a time,** because all presets use port 8000. Re-running a command resumes unfinished runs.
+- **arXiv rate-limits by IP.** Don't run several evaluations at once from one network. On repeated `429` errors, wait and re-run; runs that ended in `error` are retried.
+- **Corporate macOS (TLS-inspecting proxy):**
+  - arXiv needs `SSL_CERT_FILE` pointing at the system certificates:
+    ```sh
+    security find-certificate -a -p /Library/Keychains/System.keychain /System/Library/Keychains/SystemRootCertificates.keychain > ~/ca-bundle.pem
+    export SSL_CERT_FILE=~/ca-bundle.pem
+    ```
+  - `uv` must be on `PATH`.
+- **macOS results are not comparable with the CUDA (RTX) runs:** they use different 4-bit checkpoints (MLX).
+- **The MLflow server is per machine** (localhost only, no authentication).
+
 ## Model server
 
 Presets (set `LLM_MODEL` in `.env` to the preset name): `qwen`, `gemma`, `llama` (≤ 12 GB VRAM), `qwen-mid` (~8 GB), `qwen-weak` (~4 GB). Definitions: `src/tool_eval/server/presets/{cuda,metal}/`. Both paths serve `http://localhost:8000/v1`.
