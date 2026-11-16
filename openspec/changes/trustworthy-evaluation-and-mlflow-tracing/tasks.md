@@ -54,7 +54,7 @@
 ## 8. Verification
 
 - [x] 8.1 Run `uv run pytest`, `ruff check`, `ruff format --check` and `mypy`, and verify they all pass.
-- [ ] 8.2 On the RTX host, with `make mlflow-up` and `MLFLOW_TRACKING_URI=http://localhost:5050`, run `make eval-presets PRESETS="qwen llama gemma" REPEATS=1 ONLY= LEVELS="level1 level2 level3"`. Verify that:
+- [x] 8.2 On the RTX host, with `make mlflow-up` and `MLFLOW_TRACKING_URI=http://localhost:5050`, run `make eval-presets PRESETS="qwen llama gemma" REPEATS=1 ONLY= LEVELS="level1 level2 level3"`. Verify that:
   - every run has one MLflow run and one trace with assessments;
   - the traces contain nested tool-internal model calls and error spans where tools failed;
   - `papers_read` is reported for every run;
@@ -62,6 +62,33 @@
   - `gemma` level 1 no longer hits the step limit;
   - per-preset workspaces are kept.
   Record success rate and score per model and level, compared with the 2026-11-16 baseline.
+
+  Result (2026-11-16, commits up to `75c88bd`; 90 runs, all `completed`).
+
+  **Success and mean score, baseline → this change:**
+
+  | Model | Level 1 | Level 2 | Level 3 |
+  | --- | --- | --- | --- |
+  | `qwen` | 10/10 (1.00) → 10/10 (1.00) | 10/10 (1.00) → 10/10 (1.00) | 10/10 (1.00) → 10/10 (1.00) |
+  | `llama` | 1/10 (0.36) → 0/10 (0.46) | 0/10 (0.28) → 1/10 (0.40) | 7/10 (0.97) → 10/10 (1.00) |
+  | `gemma` | 5/10 (0.77) → 9/10 (0.99) | 9/10 (0.99) → 10/10 (1.00) | 9/10 (0.99) → 10/10 (1.00) |
+
+  **MLflow:**
+  - all 90 records have their trace on the server;
+  - each trace has exactly one root span named after the run, its run link, its tags and 11 assessments, including `papers_read`;
+  - tool-internal model calls are nested (30 under the level-3 tool, for example);
+  - 20 error spans record failed tool calls.
+
+  **Checks:**
+  - `papers_read` was reported for all runs and failed in `llama` 17/30, `gemma` 1/30 and `qwen` 0/30;
+  - no PDF size errors;
+  - no `step_limit` (`gemma` used up to 55 calls);
+  - 30 run directories per preset;
+  - 30 distinct seeds per preset.
+
+  **Issues found and fixed during the run:**
+  - **MLflow upload race.** `log_feedback` raised `Trace … not found` for a trace still in the asynchronous upload queue, which ended the `llama` evaluation after 9 runs. Fixed in `75c88bd`: flush before assessments, retry, and best-effort tracing.
+  - **arXiv rate limit.** A 429 phase paused the run once; it resumed automatically after arXiv recovered.
 - [x] 8.3 Remove the prototype container and volume on the RTX host (`mlflow-proto`). Verify that `docker ps -a` no longer lists it.
 
 ## Workflow follow-up
