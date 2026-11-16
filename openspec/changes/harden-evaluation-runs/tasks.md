@@ -28,8 +28,19 @@
 ## 5. Verification
 
 - [x] 5.1 Run `uv run pytest`, `ruff check`, `ruff format --check` and `mypy`, and verify they all pass.
-- [ ] 5.2 On the RTX 5080, run `make eval-presets PRESETS=qwen REPEATS=1 ONLY= LEVELS="level1 level2 level3"` (all 10 scenarios). Verify that no run ends with status `error`, that every level-2 review has exactly 5 paper sections, and that records carry a `seed`.
-- [ ] 5.3 Run `make eval-presets PRESETS=qwen-weak REPEATS=1` twice, restarting the server in between. Verify that the two repeat-1 runs have different seeds and different token counts, unlike the identical 500,923/6,783 seen before.
+- [x] 5.2 On the RTX 5080, run `make eval-presets PRESETS=qwen REPEATS=1 ONLY= LEVELS="level1 level2 level3"` (all 10 scenarios). Verify that no run ends with status `error`, that every level-2 review has exactly 5 paper sections, and that records carry a `seed`.
+
+  Result (2026-11-16, commit `4ce2a36`):
+  - 30/30 runs completed and succeeded (26/30 before this change). `level3-diffusion-2023h2`, previously an `error`, now succeeds.
+  - Every level-2 review has 5 paper sections and 1 bibliography (before: 10 and 15 sections for `rag` and `protein`).
+  - 30 distinct seeds recorded, and one config hash for all 30 runs.
+  - No `UnicodeEncodeError`, no `fontTools` warning, no arXiv retries; the arXiv cache holds 67 responses.
+- [x] 5.3 Run `make eval-presets PRESETS=qwen-weak REPEATS=1` twice, restarting the server in between. Verify that the two repeat-1 runs have different seeds and different token counts, unlike the identical 500,923/6,783 seen before.
+
+  Result:
+  - Session A: seed 459687843, 592,974/7,212 tokens, `step_limit`.
+  - Session B: seed 40132346, 469,739/15,322 tokens, `failed` (context overflow, agent-caused).
+  - The two sessions now produce different samples.
 
 ## Workflow follow-up
 
