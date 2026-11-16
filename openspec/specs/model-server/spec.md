@@ -142,7 +142,7 @@ The project SHALL provide one command that, for each preset in a given list:
 3. runs the evaluation with a given number of repeats;
 4. stops the server.
 
-The command SHALL stop the active server even when interrupted. It SHALL write one results file per preset, and it SHALL resume finished runs when it is run again with the same configuration. It SHALL keep each preset's run workspaces in a directory of that preset's own, so that one preset's runs never delete another preset's.
+The command SHALL stop the active server even when interrupted. It SHALL keep one results file and one workspace directory per preset, and SHALL skip finished runs on a rerun with the same configuration.
 
 #### Scenario: Several presets in a row
 - **WHEN** a user runs `make eval-presets PRESETS="llama gemma" REPEATS=3` with no server running
