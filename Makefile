@@ -8,7 +8,7 @@ PRESETS ?= $(ALL_PRESETS)
 REPEATS ?= 3
 ONLY ?= rag-2024h1
 LEVELS ?= level1
-# MLflow tracking server (docker-compose.mlflow.yml); UI and API listen on localhost only.
+# MLflow tracking server (docker-compose.mlflow.yml); UI and API listen on all interfaces.
 MLFLOW_PORT ?= 5050
 MLFLOW_COMPOSE := docker compose -f docker-compose.mlflow.yml
 API := http://localhost:8000/v1

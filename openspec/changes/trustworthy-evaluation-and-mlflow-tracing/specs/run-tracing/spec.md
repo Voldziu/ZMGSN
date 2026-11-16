@@ -7,11 +7,16 @@ Records every evaluation run in a self-hosted MLflow tracking server: its settin
 ## ADDED Requirements
 
 ### Requirement: Self-hosted tracking server
-The project SHALL provide an MLflow tracking server that runs in Docker Compose, separately from the model presets. Its version SHALL match the client library. It SHALL keep its data on a Docker volume across restarts, and it SHALL be reachable only from the local machine at `http://localhost:5050`.
+The project SHALL provide an MLflow tracking server that runs in Docker Compose, separately from the model presets. Its version SHALL match the client library. It SHALL keep its data on a Docker volume across restarts. It SHALL listen on port 5050 on all interfaces, so that other machines on the local network can use it, for example at `http://192.168.1.4:5050` on the RTX host.
 
 #### Scenario: Start the server
 - **WHEN** a user runs `make mlflow-up`
 - **THEN** the tracking server starts, its `/health` endpoint answers `OK`, and the UI is available at `http://localhost:5050`
+
+#### Scenario: Reachable from the local network
+- **GIVEN** the server runs on the RTX host
+- **WHEN** another machine on the network requests `http://192.168.1.4:5050/health`
+- **THEN** it answers `OK`, so that machine can set `MLFLOW_TRACKING_URI` to that address
 
 #### Scenario: Presets do not stop the server
 - **GIVEN** the tracking server is running

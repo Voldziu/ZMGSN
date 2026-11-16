@@ -94,7 +94,8 @@ Relevant current state:
   `mlflow server --backend-store-uri sqlite:////mlflow/mlflow.db --artifacts-destination /mlflow/artifacts --serve-artifacts --host 0.0.0.0 --port 5000`.
 - **Storage and access.**
   - Volume `mlflow-data` is mounted at `/mlflow`.
-  - Port mapping is `127.0.0.1:5050:5000`: localhost only, because the server has no authentication, and 5050 because macOS's AirPlay receiver holds 5000.
+  - Port mapping is `0.0.0.0:5050:5000`. All interfaces, at the user's request, so the team can reach one server on the local network (`http://192.168.1.4:5050` on the RTX host). The server has no authentication, so anyone on that network can read and change runs. Port 5050 because macOS's AirPlay receiver holds 5000.
+  - On the RTX host, WSL runs in NAT mode (`eth0` 172.30.x.x). LAN access therefore also needs WSL mirrored networking and a Windows firewall rule for port 5050. Both are host settings outside the repo. MLflow already accepts the `Host: 192.168.1.4:5050` header, because its default allowed hosts include private IPs.
   - The healthcheck is `/health`.
 - **Why a separate project.** `make docker-down PRESET=…`, which `eval-presets` runs after every preset, never touches it. It also runs on macOS, because MLflow needs no GPU.
 - **Why SQLite.** Since MLflow 3.3, spans are stored in the tracking database. The artifact store holds only attachments and artifacts. One SQLite writer is enough for sequential evaluation.

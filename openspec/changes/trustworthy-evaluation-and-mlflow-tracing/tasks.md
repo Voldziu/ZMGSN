@@ -31,14 +31,14 @@
 
 ## 6. MLflow tracking server
 
-- [x] 6.1 Add `docker-compose.mlflow.yml` (project `tool-eval-mlflow`) running `ghcr.io/mlflow/mlflow:v3.18.0` with the SQLite backend, served artifacts, volume `mlflow-data`, port `127.0.0.1:5050:5000` and a `/health` healthcheck. Verify that `docker compose -f docker-compose.mlflow.yml config` passes.
+- [x] 6.1 Add `docker-compose.mlflow.yml` (project `tool-eval-mlflow`) running `ghcr.io/mlflow/mlflow:v3.18.0` with the SQLite backend, served artifacts, volume `mlflow-data`, port `0.0.0.0:5050:5000` (changed from localhost-only at the user's request) and a `/health` healthcheck. Verify that `docker compose -f docker-compose.mlflow.yml config` passes.
 - [x] 6.2 Add Makefile targets `mlflow-up` (start and wait for health), `mlflow-down` and `mlflow-logs` in a new help section, and document the server in README (start, UI URL, `mlflow db upgrade` before version bumps). Verify on the RTX host:
   - `make mlflow-up` reports healthy and `curl localhost:5050/version` returns `3.18.0`;
   - `make docker-down PRESET=qwen` leaves the MLflow container running.
 
 ## 7. MLflow tracing client
 
-- [ ] 7.1 Add `mlflow-skinny==3.18.0` to the dependencies and update `uv.lock`. If it conflicts with the `llm` group, use a separate `tracing` group that conflicts with `llm`. Verify that `uv lock` and `uv sync` succeed on macOS, and that the CUDA image still builds.
+- [x] 7.1 Add `mlflow-skinny==3.18.0` to the dependencies and update `uv.lock`. If it conflicts with the `llm` group, use a separate `tracing` group that conflicts with `llm`. Verify that `uv lock` and `uv sync` succeed on macOS, and that the CUDA image still builds.
 - [x] 7.2 Add `evaluation/tracing.py` with `tracing_enabled`, `start_tracing` (health check, experiment, `mlflow.langchain.autolog(silent=True)`), `traced_run` and `stop_tracing` (flush), importing `mlflow` lazily. Verify with unit tests:
   - with tracing disabled, nothing touches MLflow;
   - with tracing enabled and the server unhealthy, `start_tracing` raises an error naming the URI.
@@ -53,7 +53,7 @@
 
 ## 8. Verification
 
-- [ ] 8.1 Run `uv run pytest`, `ruff check`, `ruff format --check` and `mypy`, and verify they all pass.
+- [x] 8.1 Run `uv run pytest`, `ruff check`, `ruff format --check` and `mypy`, and verify they all pass.
 - [ ] 8.2 On the RTX host, with `make mlflow-up` and `MLFLOW_TRACKING_URI=http://localhost:5050`, run `make eval-presets PRESETS="qwen llama gemma" REPEATS=1 ONLY= LEVELS="level1 level2 level3"`. Verify that:
   - every run has one MLflow run and one trace with assessments;
   - the traces contain nested tool-internal model calls and error spans where tools failed;

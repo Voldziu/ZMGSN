@@ -26,10 +26,11 @@ services:
       - 0.0.0.0
       - --port
       - "5000"
-    # Localhost only: the server has no authentication. 5050 because macOS's AirPlay receiver
-    # listens on 5000.
+    # All interfaces, so the team can reach it on the local network (on the RTX host:
+    # http://192.168.1.4:5050). The server has no authentication: anyone on the network can read
+    # and change runs. 5050 because macOS's AirPlay receiver listens on 5000.
     ports:
-      - "127.0.0.1:${MLFLOW_PORT:-5050}:5000"
+      - "0.0.0.0:${MLFLOW_PORT:-5050}:5000"
     volumes:
       - mlflow-data:/mlflow
     healthcheck:
