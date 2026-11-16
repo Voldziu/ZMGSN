@@ -27,7 +27,25 @@
 
 ## 5. Verification on hardware
 
-- [ ] 5.1 On the RTX 5080, run each of the 5 presets with 3 repeats at the default limit. Verify that no run ends with HTTP 400, that `llama` and `gemma` can complete, and record status, score, calls and tool errors per preset.
+- [x] 5.1 On the RTX 5080, run each of the 5 presets with 3 repeats at the default limit. Verify that no run ends with the multi-tool-call HTTP 400, that `llama` and `gemma` can complete, and record status, score, calls and tool errors per preset.
+
+  Result of `make eval-presets` on 2026-11-16 (commit `a072033`; scenario `rag-2024h1`, level 1, 30 steps):
+  - No arXiv errors, no `429`, no multi-tool-call 400.
+  - The only HTTP 400 is a context overflow (`maximum context length`) in `qwen-weak` repeat 2. The runner records it as `failed` (agent-caused), as designed.
+
+  | Preset | Statuses | Scores | Model calls | Tool errors |
+  | --- | --- | --- | --- | --- |
+  | `qwen` | 3× completed | 1.00, 1.00, 1.00 | 9, 8, 8 | 0, 0, 0 |
+  | `gemma` | 3× completed | 1.00, 1.00, 1.00 | 29, 25, 30 | 0, 2, 2 |
+  | `llama` | 3× completed | 0.11, 0.33, 0.67 | 8, 9, 8 | 0, 1, 0 |
+  | `qwen-mid` | 3× completed | 1.00, 1.00, 1.00 | 24, 21, 25 | 0, 0, 0 |
+  | `qwen-weak` | step_limit, failed (context), step_limit | 0.33, 0.56, 0.00 | 31, 19, 31 | 5, 11, 12 |
+
+  Observation for a follow-up change: after a fresh server start, repeat *n* reproduces exactly across sessions.
+  - `qwen-weak` repeat 1 used 500,923 input / 6,783 output tokens both on 2026-11-15 and on 2026-11-16.
+  - `llama` repeated its 0.11 / 0.33 / 0.67.
+
+  vLLM therefore samples deterministically per server start, so repeats from different sessions are not independent draws.
 - [x] 5.2 Run the unit tests, `ruff` and `mypy`, and verify they all pass.
 
 ## Workflow follow-up
