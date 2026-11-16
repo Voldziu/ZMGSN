@@ -201,7 +201,11 @@ def test_each_run_is_an_mlflow_run_with_one_trace(
 
     assert fake_mlflow.named("log_artifact").count("review.md") == 2
     assert fake_mlflow.named("log_text") == ["record.json", "record.json"]
-    assert fake_mlflow.named("flush") == [None]
+    assert fake_mlflow.named("flush") == [
+        None,
+        None,
+        None,
+    ]  # one per run (before assessments), one at the end
     assert [(r.mlflow_run_id, r.trace_id) for r in records] == [
         ("run-1", "tr-1"),
         ("run-2", "tr-2"),
@@ -215,3 +219,60 @@ def test_experiment_name_comes_from_the_environment(
     _patch_agent(monkeypatch)
     _evaluate(tmp_path)
     assert fake_mlflow.named("set_experiment") == ["thesis-final"]
+
+
+class _TraceNotStoredYet(Exception):
+    """Like MLflow's RESOURCE_DOES_NOT_EXIST for a trace still in the async upload queue."""
+
+
+def test_assessments_wait_for_the_trace_upload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_mlflow: _FakeMlflow
+) -> None:
+    flushed = {"done": False}
+    real_flush, real_feedback = fake_mlflow.flush_trace_async_logging, fake_mlflow.log_feedback
+
+    def flush() -> None:
+        flushed["done"] = True
+        real_flush()
+
+    def feedback(**kwargs: Any) -> None:
+        if not flushed["done"]:
+            raise _TraceNotStoredYet("Trace not found")
+        real_feedback(**kwargs)
+
+    monkeypatch.setattr(fake_mlflow, "flush_trace_async_logging", flush)
+    monkeypatch.setattr(fake_mlflow, "log_feedback", feedback)
+    monkeypatch.setattr(tracing, "_sleep", lambda seconds: None)
+    _patch_agent(monkeypatch)
+    records = load_records(_evaluate(tmp_path))
+    assert len(records) == 2
+    assert len(fake_mlflow.named("log_feedback")) == 2 * (1 + len(records[0].outcome.criteria))  # type: ignore[union-attr]
+
+
+def test_mlflow_failures_never_stop_the_evaluation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_mlflow: _FakeMlflow
+) -> None:
+    def feedback(**kwargs: Any) -> None:
+        raise _TraceNotStoredYet("Trace not found")
+
+    monkeypatch.setattr(fake_mlflow, "log_feedback", feedback)
+    monkeypatch.setattr(tracing, "_sleep", lambda seconds: None)
+    _patch_agent(monkeypatch)
+    records = load_records(_evaluate(tmp_path))
+    assert [r.status for r in records] == ["completed", "completed"]
+    assert all(r.trace_id for r in records)
+
+
+def test_failed_run_creation_falls_back_to_untraced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_mlflow: _FakeMlflow
+) -> None:
+    @contextmanager
+    def broken_start_run(run_name: str) -> Iterator[Any]:
+        raise ConnectionError("tracking server went away")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(fake_mlflow, "start_run", broken_start_run)
+    _patch_agent(monkeypatch)
+    records = load_records(_evaluate(tmp_path))
+    assert [r.status for r in records] == ["completed", "completed"]
+    assert [(r.mlflow_run_id, r.trace_id) for r in records] == [(None, None), (None, None)]

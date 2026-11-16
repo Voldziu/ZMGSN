@@ -124,6 +124,10 @@ Relevant current state:
     5. returns the MLflow run ID and trace ID.
   - `stop_tracing()`: `mlflow.flush_trace_async_logging()`, called in a `finally` block of `run_evaluation`, because asynchronous trace logging is on by default.
 - **Run record.** `RunRecord` gains `mlflow_run_id` and `trace_id` (`None` when tracing is off).
+- **Best effort after the health check.** Once the start-up health check has passed, any MLflow failure is logged as a warning and never stops the evaluation or changes its results.
+  - The cause: on the RTX, one `llama` run's `log_feedback` raised `RESOURCE_DOES_NOT_EXIST: Trace … not found`. The trace was still in the asynchronous upload queue, and the exception ended the whole evaluation after 9 runs.
+  - The fix: assessments are now logged after `flush_trace_async_logging()`, with up to 3 attempts.
+  - If an MLflow run cannot be created, that evaluation run continues untraced (its IDs are `None`).
 - **Disabled path.** When tracing is off, nothing in `tracing.py` imports `mlflow` at module level, and the code path is a no-op, so unit tests stay offline.
 - **Autolog modes.** `run_tracer_inline` is not used: our runs are synchronous, and the documented merge issue affects async use only.
 - **Known issue.** MLflow issue #27258: with async logging, some traces also upload a redundant `traces.json` artifact, which is harmless.

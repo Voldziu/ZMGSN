@@ -5,11 +5,16 @@ with exactly one trace: a root `AGENT` span named after the run, under which
 `mlflow.langchain.autolog` nests every agent model call, tool call and model call made inside a
 tool. The outcome score and every criterion are attached to the trace as code-sourced
 assessments. `mlflow` is imported lazily, so the disabled path never needs it.
+
+Tracing is best effort: once the server has passed the start-up health check, an MLflow
+failure is logged as a warning and never stops the evaluation or changes its results.
 """
 
 import os
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+import time
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import ExitStack, contextmanager
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -17,10 +22,16 @@ import httpx
 
 from tool_eval.evaluation.models import RunRecord
 from tool_eval.exceptions import TrackingServerError
+from tool_eval.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 DEFAULT_EXPERIMENT = "tool-eval"
 _CHECKS_SOURCE = "tool_eval.evaluation.checks"
 _MAX_TAG_CHARS = 5000  # MLflow tag values are limited in length
+_FEEDBACK_ATTEMPTS = 3
+_FEEDBACK_RETRY_SECONDS = 2.0
+_sleep = time.sleep  # patched in tests
 
 
 def tracing_enabled() -> bool:
@@ -93,10 +104,16 @@ class RunTrace:
             return
         from mlflow.entities import SpanType  # noqa: PLC0415
 
-        with self._mlflow.start_span(name=name, span_type=SpanType.AGENT) as span:
-            self._span = span
-            self.trace_id = span.trace_id
-            self._mlflow.update_current_trace(tags=dict(tags), session_id=session_id)
+        with ExitStack() as stack:
+            try:
+                span = stack.enter_context(
+                    self._mlflow.start_span(name=name, span_type=SpanType.AGENT)
+                )
+                self._span = span
+                self.trace_id = span.trace_id
+                self._mlflow.update_current_trace(tags=dict(tags), session_id=session_id)
+            except Exception:  # noqa: BLE001 - tracing must never stop an evaluation
+                logger.warning("MLflow: could not open the trace for %s", name, exc_info=True)
             try:
                 yield
             finally:
@@ -111,8 +128,11 @@ class RunTrace:
         """
         if self._mlflow is None or self._span is None:
             return
-        self._mlflow.update_current_trace(tags={"status": status})
-        self._span.set_outputs({"status": status, "error": error})
+        try:
+            self._mlflow.update_current_trace(tags={"status": status})
+            self._span.set_outputs({"status": status, "error": error})
+        except Exception:  # noqa: BLE001 - tracing must never stop an evaluation
+            logger.warning("MLflow: could not record the run status", exc_info=True)
 
     def finish(self, record: RunRecord, review_file: Path) -> None:
         """Log the run's metrics, tags, artifacts and per-criterion assessments.
@@ -123,7 +143,15 @@ class RunTrace:
         """
         if self._mlflow is None:
             return
+        try:
+            self._log_run(record, review_file)
+            self._log_assessments(record)
+        except Exception:  # noqa: BLE001 - tracing must never stop an evaluation
+            logger.warning("MLflow: could not log the results of %s", record.run_id, exc_info=True)
+
+    def _log_run(self, record: RunRecord, review_file: Path) -> None:
         mlflow = self._mlflow
+        assert mlflow is not None
         outcome = record.outcome
         mlflow.log_metrics(
             {
@@ -136,21 +164,28 @@ class RunTrace:
         if review_file.is_file():
             mlflow.log_artifact(str(review_file))
         mlflow.log_text(record.model_dump_json(indent=2), "record.json")
-        if outcome is None or self.trace_id is None:
+
+    def _log_assessments(self, record: RunRecord) -> None:
+        mlflow = self._mlflow
+        outcome = record.outcome
+        if mlflow is None or outcome is None or self.trace_id is None:
             return
         from mlflow.entities import AssessmentSource, AssessmentSourceType  # noqa: PLC0415
 
+        # Traces upload asynchronously, and the server rejects assessments for a trace it has
+        # not stored yet ("Trace ... not found"), so drain the upload queue first.
+        mlflow.flush_trace_async_logging()
         source = AssessmentSource(source_type=AssessmentSourceType.CODE, source_id=_CHECKS_SOURCE)
-        mlflow.log_feedback(
-            trace_id=self.trace_id, name="score", value=outcome.score, source=source
-        )
+        log = partial(mlflow.log_feedback, trace_id=self.trace_id, source=source)
+        _retry(partial(log, name="score", value=outcome.score))
         for criterion in outcome.criteria:
-            mlflow.log_feedback(
-                trace_id=self.trace_id,
-                name=criterion.name,
-                value=criterion.passed,
-                rationale=criterion.detail or None,
-                source=source,
+            _retry(
+                partial(
+                    log,
+                    name=criterion.name,
+                    value=criterion.passed,
+                    rationale=criterion.detail or None,
+                )
             )
 
 
@@ -170,9 +205,29 @@ def traced_run(run_name: str, params: Mapping[str, Any]) -> Iterator[RunTrace]:
         return
     import mlflow  # noqa: PLC0415
 
-    with mlflow.start_run(run_name=run_name) as run:
-        mlflow.log_params(dict(params))
-        yield RunTrace(mlflow, run.info.run_id)
+    with ExitStack() as stack:
+        try:
+            run = stack.enter_context(mlflow.start_run(run_name=run_name))
+            mlflow.log_params(dict(params))
+            trace = RunTrace(mlflow, run.info.run_id)
+        except Exception:  # noqa: BLE001 - tracing must never stop an evaluation
+            logger.warning(
+                "MLflow: could not start run %s; continuing untraced", run_name, exc_info=True
+            )
+            trace = RunTrace(None, None)
+        yield trace
+
+
+def _retry(call: Callable[[], object]) -> None:
+    for attempt in range(1, _FEEDBACK_ATTEMPTS + 1):
+        try:
+            call()
+        except Exception:
+            if attempt == _FEEDBACK_ATTEMPTS:
+                raise
+            _sleep(_FEEDBACK_RETRY_SECONDS)
+        else:
+            return
 
 
 def _server_healthy(uri: str) -> bool:
