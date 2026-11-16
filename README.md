@@ -44,7 +44,7 @@ Notes:
     ```
   - `uv` must be on `PATH`.
 - **macOS results are not comparable with the CUDA (RTX) runs:** they use different 4-bit checkpoints (MLX).
-- **The MLflow server listens on the local network** (port 5050, no authentication): colleagues can point `MLFLOW_TRACKING_URI` at the RTX host (`http://192.168.1.4:5050`) to log into the same experiment. On WSL this also needs mirrored networking and a Windows firewall rule for port 5050.
+- **Everyone runs their own MLflow server** (`make mlflow-up`). It listens on port 5050 on all interfaces without authentication, so you can also open it from your other devices on the local network. On WSL, that also needs mirrored networking and a Windows firewall rule for port 5050.
 
 ## Model server
 
@@ -107,7 +107,7 @@ A run is successful only if every check passes, including `papers_read`: every p
 
 ## Tracing with MLflow
 
-A self-hosted MLflow 3.18 server records every evaluation run: its settings, results and review as an MLflow run, and every model and tool call (with tokens and errors) as one trace. It runs in its own Docker Compose project (`docker-compose.mlflow.yml`), needs no GPU, and listens on all interfaces (port 5050), so others on the local network can use it, for example `MLFLOW_TRACKING_URI=http://192.168.1.4:5050`. It has no authentication.
+A self-hosted MLflow 3.18 server records every evaluation run: its settings, results and review as an MLflow run, and every model and tool call (with tokens and errors) as one trace. It runs in its own Docker Compose project (`docker-compose.mlflow.yml`), needs no GPU, and listens on all interfaces (port 5050) without authentication. Everyone runs their own server.
 
 ```sh
 make mlflow-up                                   # start and wait until healthy; UI at http://localhost:5050
