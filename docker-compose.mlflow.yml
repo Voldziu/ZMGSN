@@ -1,0 +1,48 @@
+# MLflow tracking server for evaluation runs and traces. It is its own Compose project, so
+# starting and stopping model presets (docker-compose.yml) never touches it. Needs no GPU, so
+# it runs on macOS too.
+#
+#   make mlflow-up      start and wait until healthy; UI at http://localhost:5050
+#   make mlflow-down    stop (data stays in the mlflow-data volume)
+#
+# Since MLflow 3.3 spans are stored in the tracking database, so SQLite plus a local artifact
+# directory is enough for sequential evaluation. Before bumping the image version, back up the
+# volume and run `mlflow db upgrade sqlite:////mlflow/mlflow.db` with the new image.
+name: tool-eval-mlflow
+
+services:
+  mlflow:
+    # Keep in step with mlflow-skinny in pyproject.toml.
+    image: ghcr.io/mlflow/mlflow:v3.18.0
+    command:
+      - mlflow
+      - server
+      - --backend-store-uri
+      - sqlite:////mlflow/mlflow.db
+      - --artifacts-destination
+      - /mlflow/artifacts
+      - --serve-artifacts
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+    # Localhost only: the server has no authentication. 5050 because macOS's AirPlay receiver
+    # listens on 5000.
+    ports:
+      - "127.0.0.1:${MLFLOW_PORT:-5050}:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:5000/health')
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  mlflow-data:

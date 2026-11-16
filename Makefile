@@ -8,6 +8,9 @@ PRESETS ?= $(ALL_PRESETS)
 REPEATS ?= 3
 ONLY ?= rag-2024h1
 LEVELS ?= level1
+# MLflow tracking server (docker-compose.mlflow.yml); UI and API listen on localhost only.
+MLFLOW_PORT ?= 5050
+MLFLOW_COMPOSE := docker compose -f docker-compose.mlflow.yml
 API := http://localhost:8000/v1
 # Homebrew install first, otherwise the install.sh venv.
 VLLM ?= $(shell command -v vllm 2>/dev/null || echo $(HOME)/.venv-vllm-metal/bin/vllm)
@@ -18,7 +21,7 @@ endif
 
 .DEFAULT_GOAL := help
 .PHONY: help mac-install mac-serve docker-up docker-status docker-logs docker-down \
-	models tool-check eval-smoke eval-presets test
+	models tool-check eval-smoke eval-presets mlflow-up mlflow-down mlflow-logs test
 
 help: ## Show this cheat sheet
 	@echo "Usage: make <target> PRESET=<name>   presets: $(ALL_PRESETS)   (default: $(PRESET))"
@@ -78,6 +81,24 @@ eval-smoke: ## 5. One evaluation run against the server (writes results/smoke-<p
 eval-presets: ## Start each preset, run the evaluation, stop it (PRESETS, REPEATS, ONLY, LEVELS)
 	@PRESETS="$(PRESETS)" REPEATS="$(REPEATS)" ONLY="$(ONLY)" LEVELS="$(LEVELS)" VLLM="$(VLLM)" \
 		bash src/tool_eval/server/eval-presets.sh
+
+##@ MLflow tracking server (any platform, Docker; set MLFLOW_TRACKING_URI to trace runs)
+mlflow-up: ## Start the MLflow server and wait until healthy (UI: http://localhost:5050)
+	MLFLOW_PORT=$(MLFLOW_PORT) $(MLFLOW_COMPOSE) up -d
+	@for i in $$(seq 1 60); do \
+		if curl -sf -m 2 http://localhost:$(MLFLOW_PORT)/health >/dev/null; then \
+			echo "MLflow $$(curl -s http://localhost:$(MLFLOW_PORT)/version) ready at http://localhost:$(MLFLOW_PORT)"; \
+			exit 0; \
+		fi; \
+		sleep 2; \
+	done; \
+	echo "MLflow did not become healthy; see: make mlflow-logs"; exit 1
+
+mlflow-down: ## Stop the MLflow server (runs and traces stay in the mlflow-data volume)
+	$(MLFLOW_COMPOSE) down
+
+mlflow-logs: ## Follow MLflow server logs
+	$(MLFLOW_COMPOSE) logs -f
 
 test: ## Unit tests, lint, types (no server needed)
 	uv run pytest -q && uv run ruff check . && uv run mypy src tests

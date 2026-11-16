@@ -683,3 +683,36 @@ def test_fingerprint_covers_checks_version(tmp_path: Path, monkeypatch: pytest.M
     base = runner.config_fingerprint(_settings(tmp_path))
     monkeypatch.setattr(runner, "CHECKS_VERSION", CHECKS_VERSION + 1)
     assert runner.config_fingerprint(_settings(tmp_path)) != base
+
+
+def _final_reply(monkeypatch: pytest.MonkeyPatch, reply: AIMessage) -> None:
+    def run_task(agent: Any, task: str, **kwargs: Any) -> list[Any]:
+        _write_review(get_settings().workspace_dir, _review_text())
+        return [HumanMessage(task), reply]
+
+    monkeypatch.setattr(runner, "build_agent", lambda level, *, settings=None: object())
+    monkeypatch.setattr(runner, "run_task", run_task)
+
+
+def test_reply_cut_by_token_limit_fails_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cut = AIMessage(
+        '{"name": "write_review", "parameters": {"markdown": "# Review',
+        response_metadata={"finish_reason": "length"},
+    )
+    _final_reply(monkeypatch, cut)
+    _, output = _run(tmp_path)
+    record = load_records(output)[0]
+    assert record.status == "failed"
+    assert record.error is not None
+    assert "LLM_MAX_TOKENS" in record.error
+
+
+def test_normal_final_reply_completes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _final_reply(
+        monkeypatch,
+        AIMessage("reviews/review.md", response_metadata={"finish_reason": "stop"}),
+    )
+    _, output = _run(tmp_path)
+    assert load_records(output)[0].status == "completed"

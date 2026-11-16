@@ -8,7 +8,9 @@
 #   LEVELS    tool levels (space-separated)
 #   VLLM      vllm-metal binary (macOS only)
 #
-# Results go to results/presets-<preset>.jsonl. Re-running resumes: finished runs with the same
+# Results go to results/presets-<preset>.jsonl and run workspaces to workspace/preset-runs/<preset>/
+# (one directory per preset, so presets never overwrite each other's reviews). The PDF and arXiv
+# caches stay shared in workspace/. Re-running resumes: finished runs with the same
 # configuration hash are skipped, so delete the file to start a preset from scratch.
 set -uo pipefail
 
@@ -94,9 +96,12 @@ for p in $PRESETS; do
 
   out="results/presets-$p.jsonl"
   # shellcheck disable=SC2086  # ONLY and LEVELS are intentionally word-split into arguments
-  LLM_BASE_URL=$API LLM_MODEL=$p uv run python -m tool_eval.main run \
+  LLM_BASE_URL=$API LLM_MODEL=$p \
+    PDF_CACHE_DIR="${PDF_CACHE_DIR:-workspace/pdf_cache}" \
+    ARXIV_CACHE_DIR="${ARXIV_CACHE_DIR:-workspace/arxiv_cache}" \
+    uv run python -m tool_eval.main run \
     ${ONLY:+--only $ONLY} --levels $LEVELS --repeats "$REPEATS" \
-    --output "$out" --runs-dir workspace/preset-runs \
+    --output "$out" --runs-dir "workspace/preset-runs/$p" \
     || failed+=("$p")
   stop_server
 

@@ -29,15 +29,17 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8000/v1"
     llm_api_key: SecretStr = SecretStr("EMPTY")
     llm_model: str = "qwen"
-    llm_max_tokens: int = Field(default=4096, ge=1)
+    # A whole review in one write_review call can exceed 4096 tokens; 8192 still leaves room
+    # for long prompts within the 32k context.
+    llm_max_tokens: int = Field(default=8192, ge=1)
     llm_enable_thinking: bool = False
     # Unset: preset default (see SINGLE_TOOL_CALL_PRESETS). False asks for one tool call per reply.
     llm_parallel_tool_calls: bool | None = None
     # Sampling seed sent with every request; the evaluation runner draws a fresh one per run.
     llm_seed: int | None = None
 
-    # One-tool-per-turn models need about 25 calls for a five-paper review; 30 leaves headroom.
-    agent_max_steps: int = Field(default=30, ge=1)
+    # One-tool-per-turn models need up to ~33 calls for a five-paper review; 100 leaves room.
+    agent_max_steps: int = Field(default=100, ge=1)
     agent_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     prompt_version: str = "v2"
 

@@ -21,7 +21,7 @@ def test_defaults_target_local_vllm() -> None:
     settings = Settings(_env_file=None)
     assert settings.llm_base_url == "http://localhost:8000/v1"
     assert settings.llm_model == "qwen"
-    assert settings.llm_max_tokens == 4096
+    assert settings.llm_max_tokens == 8192
     assert settings.llm_enable_thinking is False
 
 
@@ -32,8 +32,8 @@ def test_chat_model_sends_max_tokens_and_thinking_flag() -> None:
     assert model.extra_body == {"chat_template_kwargs": {"enable_thinking": True}}
 
 
-def test_default_step_limit_is_30() -> None:
-    assert Settings(_env_file=None).agent_max_steps == 30
+def test_default_step_limit_is_100() -> None:
+    assert Settings(_env_file=None).agent_max_steps == 100
 
 
 @pytest.mark.parametrize(

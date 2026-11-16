@@ -66,3 +66,26 @@ def test_agent_accepts_stringified_list_argument() -> None:
     tool_message = next(m for m in result["messages"] if isinstance(m, ToolMessage))
     assert tool_message.status == "success"
     assert "Lovelace, A." in str(tool_message.content)
+
+
+def test_python_list_literal_is_decoded() -> None:
+    # Exactly what llama sent 29 times in a row on 2026-11-16.
+    raw = "['E. Kirkinis', 'A. V. Andreev', 'M. Olvera de la Cruz']"
+    args = coerce_json_string_args({"authors": raw}, SCHEMA)
+    assert args == {"authors": ["E. Kirkinis", "A. V. Andreev", "M. Olvera de la Cruz"]}
+
+
+def test_python_dict_literal_is_decoded_for_objects() -> None:
+    assert coerce_json_string_args({"meta": "{'k': 1}"}, SCHEMA) == {"meta": {"k": 1}}
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"authors": "E. Kirkinis, A. V. Andreev"},  # neither JSON nor a Python literal
+        {"authors": "__import__('os').getcwd()"},  # code, not a literal
+        {"title": "['a', 'b']"},  # declared as a string
+    ],
+)
+def test_non_literals_still_pass_through(args: dict[str, Any]) -> None:
+    assert coerce_json_string_args(args, SCHEMA) == args

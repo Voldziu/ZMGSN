@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import openai
+from langchain_core.messages import AIMessage, AnyMessage
 from langgraph.errors import GraphRecursionError
 
 from tool_eval.agent import build_agent, run_task
@@ -180,7 +181,7 @@ def run_single(
     with use_settings(run_settings):
         try:
             agent = build_agent(level, settings=run_settings)
-            run_task(
+            messages = run_task(
                 agent,
                 task,
                 max_steps=run_settings.agent_max_steps,
@@ -189,6 +190,12 @@ def run_single(
                 tags=[level, scenario.id],
                 metadata={"level": level, "scenario_id": scenario.id, "repeat": repeat},
             )
+            if _hit_token_limit(messages):
+                status = "failed"
+                error = (
+                    "final reply hit the completion-token limit "
+                    f"(LLM_MAX_TOKENS={run_settings.llm_max_tokens}) without a tool call"
+                )
         except GraphRecursionError:
             status = "step_limit"
         except Exception as exc:  # noqa: BLE001 - recorded, not hidden
@@ -238,6 +245,22 @@ def run_single(
 
 def _run_id(level: str, scenario_id: str, repeat: int) -> str:
     return f"{level}-{scenario_id}-{repeat:02d}"
+
+
+def _hit_token_limit(messages: Sequence[AnyMessage] | None) -> bool:
+    """Whether the agent's last reply was cut by the token limit instead of ending normally.
+
+    A tool call cut off this way cannot be parsed, so the agent stops with a truncated reply that
+    would otherwise look like a finished run.
+    """
+    if not messages:
+        return False
+    last = messages[-1]
+    return (
+        isinstance(last, AIMessage)
+        and not last.tool_calls
+        and last.response_metadata.get("finish_reason") == "length"
+    )
 
 
 def _is_context_overflow(exc: Exception) -> bool:

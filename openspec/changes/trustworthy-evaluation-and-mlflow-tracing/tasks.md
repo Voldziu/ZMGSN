@@ -21,9 +21,9 @@
 
 ## 4. Agent limits and arguments
 
-- [ ] 4.1 Change the defaults to `agent_max_steps=100` and `llm_max_tokens=8192`, and update `.env.example`. Verify with settings-default tests.
-- [ ] 4.2 In `run_single`, record a run whose final message is an `AIMessage` with `finish_reason == "length"` and no tool calls as `failed`, with an error naming the token limit. Verify with a runner test using a patched agent that returns such a message, and that a normal final reply stays `completed`.
-- [ ] 4.3 Extend `coerce_json_string_args` to fall back to `ast.literal_eval`, keeping the value only for a declared `array`/`object` with a matching type. Verify with tests: Python list literal decoded, Python dict literal decoded for an object argument, plain text still rejected, string arguments unchanged.
+- [x] 4.1 Change the defaults to `agent_max_steps=100` and `llm_max_tokens=8192`, and update `.env.example`. Verify with settings-default tests.
+- [x] 4.2 In `run_single`, record a run whose final message is an `AIMessage` with `finish_reason == "length"` and no tool calls as `failed`, with an error naming the token limit. Verify with a runner test using a patched agent that returns such a message, and that a normal final reply stays `completed`.
+- [x] 4.3 Extend `coerce_json_string_args` to fall back to `ast.literal_eval`, keeping the value only for a declared `array`/`object` with a matching type. Verify with tests: Python list literal decoded, Python dict literal decoded for an object argument, plain text still rejected, string arguments unchanged.
 
 ## 5. Per-preset workspaces
 
@@ -31,7 +31,7 @@
 
 ## 6. MLflow tracking server
 
-- [ ] 6.1 Add `docker-compose.mlflow.yml` (project `tool-eval-mlflow`) running `ghcr.io/mlflow/mlflow:v3.18.0` with the SQLite backend, served artifacts, volume `mlflow-data`, port `127.0.0.1:5050:5000` and a `/health` healthcheck. Verify that `docker compose -f docker-compose.mlflow.yml config` passes.
+- [x] 6.1 Add `docker-compose.mlflow.yml` (project `tool-eval-mlflow`) running `ghcr.io/mlflow/mlflow:v3.18.0` with the SQLite backend, served artifacts, volume `mlflow-data`, port `127.0.0.1:5050:5000` and a `/health` healthcheck. Verify that `docker compose -f docker-compose.mlflow.yml config` passes.
 - [ ] 6.2 Add Makefile targets `mlflow-up` (start and wait for health), `mlflow-down` and `mlflow-logs` in a new help section, and document the server in README (start, UI URL, `mlflow db upgrade` before version bumps). Verify on the RTX host:
   - `make mlflow-up` reports healthy and `curl localhost:5050/version` returns `3.18.0`;
   - `make docker-down PRESET=qwen` leaves the MLflow container running.
