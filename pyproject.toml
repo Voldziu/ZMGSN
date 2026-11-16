@@ -10,6 +10,7 @@ dependencies = [
     "httpx>=0.28.1",
     "langchain>=1.4.4",
     "langchain-openai>=1.7.0",
+    "mlflow-skinny==3.18.0",
     "pydantic-settings>=2.15.0",
     "pypdf>=6.20.0",
     "python-dotenv>=1.2.4",

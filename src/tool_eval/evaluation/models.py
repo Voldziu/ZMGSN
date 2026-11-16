@@ -123,6 +123,9 @@ class RunRecord(BaseModel):
     config_sha256: str = ""
     # Sampling seed of the run; deliberately not part of config_sha256.
     seed: int | None = None
+    # MLflow run and trace of this run when tracing was on (MLFLOW_TRACKING_URI).
+    mlflow_run_id: str | None = None
+    trace_id: str | None = None
     date_from: date
     date_to: date
     started_at: datetime

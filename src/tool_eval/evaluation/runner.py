@@ -18,6 +18,12 @@ from tool_eval.config import Settings, use_settings
 from tool_eval.evaluation.checks import CHECKS_VERSION, Lookup, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
+from tool_eval.evaluation.tracing import (
+    start_tracing,
+    stop_tracing,
+    traced_run,
+    tracing_enabled,
+)
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.prompts import load_prompt
 from tool_eval.services.reports import REVIEW_PATH
@@ -99,9 +105,40 @@ def run_evaluation(
 
     Raises:
         InvalidInputError: If `output` holds finished runs made with a different configuration.
+        TrackingServerError: If MLflow tracing is on but its server is not healthy.
     """
     output.parent.mkdir(parents=True, exist_ok=True)
     done = _finished_runs(output, config_fingerprint(settings))
+    tracing = tracing_enabled()
+    if tracing:
+        start_tracing()  # fails before any run starts
+    try:
+        return _execute_runs(
+            scenarios=scenarios,
+            levels=levels,
+            repeats=repeats,
+            output=output,
+            runs_dir=runs_dir,
+            settings=settings,
+            lookup=lookup,
+            done=done,
+        )
+    finally:
+        if tracing:
+            stop_tracing()
+
+
+def _execute_runs(
+    *,
+    scenarios: Sequence[Scenario],
+    levels: Sequence[str],
+    repeats: int,
+    output: Path,
+    runs_dir: Path,
+    settings: Settings,
+    lookup: Lookup,
+    done: set[str],
+) -> int:
     executed = 0
     for repeat in range(1, repeats + 1):
         for scenario in scenarios:
@@ -178,69 +215,103 @@ def run_single(
     meter = RunMeter()
     status: RunStatus = "completed"
     error: str | None = None
-    with use_settings(run_settings):
-        try:
-            agent = build_agent(level, settings=run_settings)
-            messages = run_task(
-                agent,
-                task,
-                max_steps=run_settings.agent_max_steps,
-                callbacks=[meter],
-                run_name=run_id,
-                tags=[level, scenario.id],
-                metadata={"level": level, "scenario_id": scenario.id, "repeat": repeat},
-            )
-            if _hit_token_limit(messages):
-                status = "failed"
-                error = (
-                    "final reply hit the completion-token limit "
-                    f"(LLM_MAX_TOKENS={run_settings.llm_max_tokens}) without a tool call"
+    fingerprint = config_fingerprint(run_settings)
+    params = {
+        "model": run_settings.llm_model,
+        "level": level,
+        "scenario": scenario.id,
+        "repeat": repeat,
+        "seed": run_settings.llm_seed,
+        "max_steps": run_settings.agent_max_steps,
+        "llm_max_tokens": run_settings.llm_max_tokens,
+        "temperature": run_settings.agent_temperature,
+        "parallel_tool_calls": run_settings.effective_parallel_tool_calls,
+        "prompt_version": run_settings.prompt_version,
+        "toolset_version": TOOLSET_VERSION,
+        "checks_version": CHECKS_VERSION,
+        "config_sha256": fingerprint,
+    }
+    with traced_run(f"{run_settings.llm_model}/{run_id}", params) as trace:
+        with (
+            use_settings(run_settings),
+            trace.agent_span(
+                run_id,
+                tags={
+                    "model": run_settings.llm_model,
+                    "level": level,
+                    "scenario": scenario.id,
+                    "repeat": str(repeat),
+                },
+                session_id=f"{run_settings.llm_model}/{scenario.id}",
+            ),
+        ):
+            try:
+                agent = build_agent(level, settings=run_settings)
+                messages = run_task(
+                    agent,
+                    task,
+                    max_steps=run_settings.agent_max_steps,
+                    callbacks=[meter],
+                    run_name=run_id,
+                    tags=[level, scenario.id],
+                    metadata={"level": level, "scenario_id": scenario.id, "repeat": repeat},
                 )
-        except GraphRecursionError:
-            status = "step_limit"
-        except Exception as exc:  # noqa: BLE001 - recorded, not hidden
-            logger.exception("Run %s failed", run_id)
-            status = "failed" if _is_context_overflow(exc) else "error"
-            error = f"{type(exc).__name__}: {exc}"
+                if _hit_token_limit(messages):
+                    status = "failed"
+                    error = (
+                        "final reply hit the completion-token limit "
+                        f"(LLM_MAX_TOKENS={run_settings.llm_max_tokens}) without a tool call"
+                    )
+            except GraphRecursionError:
+                status = "step_limit"
+            except Exception as exc:  # noqa: BLE001 - recorded, not hidden
+                logger.exception("Run %s failed", run_id)
+                status = "failed" if _is_context_overflow(exc) else "error"
+                error = f"{type(exc).__name__}: {exc}"
+            trace.set_status(status, error)
 
-    outcome: OutcomeScore | None = None
-    if status != "error":
-        try:
-            outcome = evaluate_review(
-                workspace / REVIEW_PATH,
-                workspace=workspace,
-                scenario=scenario,
-                expected_papers=run_settings.review_paper_count,
-                lookup=lookup,
-            )
-        except ExternalServiceError as exc:
-            status, error = "error", f"{type(exc).__name__}: {exc}"
+        outcome: OutcomeScore | None = None
+        if status != "error":
+            try:
+                outcome = evaluate_review(
+                    workspace / REVIEW_PATH,
+                    workspace=workspace,
+                    scenario=scenario,
+                    expected_papers=run_settings.review_paper_count,
+                    lookup=lookup,
+                )
+            except ExternalServiceError as exc:
+                status, error = "error", f"{type(exc).__name__}: {exc}"
 
-    return RunRecord(
-        run_id=run_id,
-        level=level,
-        scenario_id=scenario.id,
-        repeat=repeat,
-        status=status,
-        error=error,
-        outcome=outcome,
-        cost=meter.snapshot(),
-        model=run_settings.llm_model,
-        temperature=run_settings.agent_temperature,
-        max_steps=run_settings.agent_max_steps,
-        prompt_version=run_settings.prompt_version,
-        system_prompt_sha256=system_prompt.sha256,
-        task_prompt_sha256=task_prompt.sha256,
-        review_paper_count=run_settings.review_paper_count,
-        chunk_size=run_settings.chunk_size,
-        text_max_chars=run_settings.text_max_chars,
-        pipeline_max_chunks=run_settings.pipeline_max_chunks,
-        config_sha256=config_fingerprint(run_settings),
-        seed=run_settings.llm_seed,
-        date_from=scenario.date_from,
-        date_to=scenario.date_to,
-        started_at=started_at,
-    )
+        record = RunRecord(
+            run_id=run_id,
+            level=level,
+            scenario_id=scenario.id,
+            repeat=repeat,
+            status=status,
+            error=error,
+            outcome=outcome,
+            cost=meter.snapshot(),
+            model=run_settings.llm_model,
+            temperature=run_settings.agent_temperature,
+            max_steps=run_settings.agent_max_steps,
+            prompt_version=run_settings.prompt_version,
+            system_prompt_sha256=system_prompt.sha256,
+            task_prompt_sha256=task_prompt.sha256,
+            review_paper_count=run_settings.review_paper_count,
+            chunk_size=run_settings.chunk_size,
+            text_max_chars=run_settings.text_max_chars,
+            pipeline_max_chunks=run_settings.pipeline_max_chunks,
+            config_sha256=fingerprint,
+            seed=run_settings.llm_seed,
+            mlflow_run_id=trace.mlflow_run_id,
+            trace_id=trace.trace_id,
+            date_from=scenario.date_from,
+            date_to=scenario.date_to,
+            started_at=started_at,
+        )
+        trace.finish(record, workspace / REVIEW_PATH)
+    return record
 
 
 def _run_id(level: str, scenario_id: str, repeat: int) -> str:

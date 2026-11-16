@@ -19,3 +19,7 @@ class InvalidInputError(ToolEvalError):
 
 class PromptNotFoundError(ToolEvalError):
     """The requested prompt name or version does not exist."""
+
+
+class TrackingServerError(ToolEvalError):
+    """MLflow tracing is switched on but its tracking server is not reachable or not healthy."""

@@ -11,7 +11,7 @@ from tool_eval.evaluation.checks import ArxivLookup
 from tool_eval.evaluation.report import load_records, render_markdown
 from tool_eval.evaluation.runner import arxiv_cache_dir, run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
-from tool_eval.exceptions import InvalidInputError
+from tool_eval.exceptions import InvalidInputError, TrackingServerError
 from tool_eval.tools.registry import TOOLSETS
 from tool_eval.utils.logger import get_logger
 
@@ -36,7 +36,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "run":
             return _run(args)
         return _report(args)
-    except InvalidInputError as exc:
+    except (InvalidInputError, TrackingServerError) as exc:
         logger.error("%s", exc)  # noqa: TRY400 - user-facing message, no traceback needed
         return 2
 
