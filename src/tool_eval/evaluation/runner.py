@@ -2,10 +2,11 @@
 
 import hashlib
 import json
+import random
 import re
 import secrets
 import shutil
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from tool_eval.evaluation.tracing import (
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.prompts import load_prompt
 from tool_eval.services.reports import REVIEW_PATH
-from tool_eval.tools.registry import TOOLSET_VERSION
+from tool_eval.tools.registry import TOOLSET_VERSION, TOOLSETS
 from tool_eval.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -75,6 +76,29 @@ def arxiv_cache_dir(settings: Settings, runs_dir: Path) -> Path:
     return settings.arxiv_cache_dir or runs_dir.parent / "arxiv_cache"
 
 
+def block_order(levels: Iterable[str], *, seed: int, repeat: int, scenario_id: str) -> list[str]:
+    """Return the order in which one block (one repeat of one scenario) runs its levels.
+
+    The order is a random permutation that depends only on the seed, the repeat, the scenario
+    and the set of levels, so the seed recorded with each run reproduces it. String seeds are
+    hashed with SHA-512, and only `Random.random()` is drawn, whose sequence for a given seed
+    Python keeps stable across versions. The runner plans every block over all levels of the
+    tool set, so `block_order(TOOLSETS, ...)` recomputes the plan a record's position refers to.
+
+    Args:
+        levels: Tool level keys of the block; duplicates and their order are ignored.
+        seed: Order seed of the evaluation.
+        repeat: Repetition number (1-based).
+        scenario_id: Scenario of the block.
+
+    Returns:
+        The distinct levels in run order.
+    """
+    rng = random.Random(f"{seed}:{repeat}:{scenario_id}")
+    keys = {level: rng.random() for level in sorted(set(levels))}
+    return sorted(keys, key=keys.__getitem__)
+
+
 def run_evaluation(
     *,
     scenarios: Sequence[Scenario],
@@ -84,10 +108,15 @@ def run_evaluation(
     runs_dir: Path,
     settings: Settings,
     lookup: Lookup,
+    order_seed: int | None = None,
 ) -> int:
     """Run every (repeat, scenario, level) combination that has no stored result yet.
 
-    Runs are interleaved by repeat so an interrupted evaluation still has balanced data.
+    Runs are interleaved by repeat so an interrupted evaluation still has balanced data. Each
+    block of one repeat and one scenario has a random planned order over all levels of the tool
+    set (`block_order`), and its levels run in that order, so no level systematically runs first
+    and pays for cold caches. Positions in the plan stay unique when a results file is resumed
+    with other levels.
     Runs that ended in `error` (infrastructure failures) are retried on the next invocation;
     `failed` runs are scored and kept.
 
@@ -99,6 +128,8 @@ def run_evaluation(
         runs_dir: Directory holding one workspace per run (recreated for each run).
         settings: Base settings; the temperature and model come from here.
         lookup: Resolves arXiv ids to metadata for the outcome checks.
+        order_seed: Seed of the level order within blocks. Defaults to the seed recorded in
+            `output` (so a resumed evaluation keeps its plan), else a new random seed.
 
     Returns:
         Number of runs executed in this invocation.
@@ -108,7 +139,10 @@ def run_evaluation(
         TrackingServerError: If MLflow tracing is on but its server is not healthy.
     """
     output.parent.mkdir(parents=True, exist_ok=True)
-    done = _finished_runs(output, config_fingerprint(settings))
+    done, recorded_seed = _read_results(output, config_fingerprint(settings))
+    if order_seed is None:
+        order_seed = recorded_seed if recorded_seed is not None else secrets.randbelow(2**31)
+    logger.info("Level order seed: %d", order_seed)
     tracing = tracing_enabled()
     if tracing:
         start_tracing()  # fails before any run starts
@@ -122,6 +156,7 @@ def run_evaluation(
             settings=settings,
             lookup=lookup,
             done=done,
+            order_seed=order_seed,
         )
     finally:
         if tracing:
@@ -138,12 +173,18 @@ def _execute_runs(
     settings: Settings,
     lookup: Lookup,
     done: set[str],
+    order_seed: int,
 ) -> int:
     executed = 0
+    requested = set(levels)
     for repeat in range(1, repeats + 1):
         for scenario in scenarios:
-            for level in levels:
-                if _run_id(level, scenario.id, repeat) in done:
+            # Planned over the whole tool set, so positions do not depend on `levels`.
+            plan = block_order(
+                [*TOOLSETS, *levels], seed=order_seed, repeat=repeat, scenario_id=scenario.id
+            )
+            for position, level in enumerate(plan, start=1):
+                if level not in requested or _run_id(level, scenario.id, repeat) in done:
                     continue
                 record = run_single(
                     level=level,
@@ -152,6 +193,8 @@ def _execute_runs(
                     runs_dir=runs_dir,
                     settings=settings,
                     lookup=lookup,
+                    order_seed=order_seed,
+                    block_position=position,
                 )
                 with output.open("a", encoding="utf-8") as handle:
                     handle.write(record.model_dump_json() + "\n")
@@ -160,7 +203,7 @@ def _execute_runs(
                     "%s: %s, success=%s, tokens=%d",
                     record.run_id,
                     record.status,
-                    record.outcome.success if record.outcome else None,
+                    record.success,
                     record.cost.total_tokens,
                 )
     return executed
@@ -174,8 +217,13 @@ def run_single(
     runs_dir: Path,
     settings: Settings,
     lookup: Lookup,
+    order_seed: int,
+    block_position: int,
 ) -> RunRecord:
     """Execute one agent run in a fresh workspace and score its output.
+
+    The meter starts once the run's MLflow run is open, and its snapshot is taken when the agent
+    loop ends, so neither tracing set-up nor scoring is part of the run's wall time.
 
     Args:
         level: Tool level key.
@@ -184,6 +232,9 @@ def run_single(
         runs_dir: Parent directory for the run's workspace.
         settings: Base settings.
         lookup: Resolves arXiv ids to metadata for the outcome checks.
+        order_seed: Seed of the level order of the run's block, recorded with the run.
+        block_position: 1-based position of the run in its block's planned order over all
+            levels of the tool set.
 
     Returns:
         The record of this run; infrastructure failures yield `status="error"`, agent-caused
@@ -212,7 +263,6 @@ def run_single(
     )
 
     started_at = datetime.now(UTC)
-    meter = RunMeter()
     status: RunStatus = "completed"
     error: str | None = None
     fingerprint = config_fingerprint(run_settings)
@@ -222,6 +272,8 @@ def run_single(
         "scenario": scenario.id,
         "repeat": repeat,
         "seed": run_settings.llm_seed,
+        "order_seed": order_seed,
+        "block_position": block_position,
         "max_steps": run_settings.agent_max_steps,
         "llm_max_tokens": run_settings.llm_max_tokens,
         "temperature": run_settings.agent_temperature,
@@ -245,6 +297,10 @@ def run_single(
                 session_id=f"{run_settings.llm_model}/{scenario.id}",
             ),
         ):
+            # Created only now, so wall time covers building the agent and the agent loop and
+            # nothing that waits for the tracking server. An unknown level gets no tool names;
+            # building its agent fails and records an error.
+            meter = RunMeter(tool_names=[tool.name for tool in TOOLSETS.get(level, ())])
             try:
                 agent = build_agent(level, settings=run_settings)
                 messages = run_task(
@@ -268,6 +324,7 @@ def run_single(
                 logger.exception("Run %s failed", run_id)
                 status = "failed" if _is_context_overflow(exc) else "error"
                 error = f"{type(exc).__name__}: {exc}"
+            cost = meter.snapshot()  # before scoring: wall time covers the agent run only
             trace.set_status(status, error)
 
         outcome: OutcomeScore | None = None
@@ -291,7 +348,7 @@ def run_single(
             status=status,
             error=error,
             outcome=outcome,
-            cost=meter.snapshot(),
+            cost=cost,
             model=run_settings.llm_model,
             temperature=run_settings.agent_temperature,
             max_steps=run_settings.agent_max_steps,
@@ -304,6 +361,8 @@ def run_single(
             pipeline_max_chunks=run_settings.pipeline_max_chunks,
             config_sha256=fingerprint,
             seed=run_settings.llm_seed,
+            order_seed=order_seed,
+            block_position=block_position,
             mlflow_run_id=trace.mlflow_run_id,
             trace_id=trace.trace_id,
             date_from=scenario.date_from,
@@ -338,13 +397,17 @@ def _is_context_overflow(exc: Exception) -> bool:
     return isinstance(exc, openai.BadRequestError) and bool(_CONTEXT_OVERFLOW.search(str(exc)))
 
 
-def _finished_runs(output: Path, fingerprint: str) -> set[str]:
+def _read_results(output: Path, fingerprint: str) -> tuple[set[str], int | None]:
+    """Return the IDs of the finished runs in `output` and the last order seed recorded there."""
     if not output.is_file():
-        return set()
+        return set(), None
     finished: set[str] = set()
+    order_seed: int | None = None
     for line in output.read_text(encoding="utf-8").splitlines():
         if line.strip():
             record = RunRecord.model_validate_json(line)
+            if record.order_seed is not None:
+                order_seed = record.order_seed
             if record.status == "error":
                 continue
             if record.config_sha256 != fingerprint:
@@ -354,4 +417,4 @@ def _finished_runs(output: Path, fingerprint: str) -> set[str]:
                 )
                 raise InvalidInputError(msg)
             finished.add(record.run_id)
-    return finished
+    return finished, order_seed

@@ -105,11 +105,12 @@ for p in $PRESETS; do
     || failed+=("$p")
   stop_server
 
-  # The per-level table of the report: success, score, calls, step limit, errors.
-  uv run python -m tool_eval.main report "$out" | sed -n '/^## Per level/,/^\*/p' | sed '/^\*/d'
+  # The quality table of the report: runs, successes with their interval, score, step limit.
+  uv run python -m tool_eval.main report "$out" | awk '/^## /{show = ($0 == "## Quality")} show'
 done
 
 echo "===== done ($(date +%T)); results: results/presets-<preset>.jsonl"
+echo "all models: uv run python -m tool_eval.main report results/presets-*.jsonl --csv results/summary.csv"
 if (( ${#failed[@]} )); then
   echo "failed: ${failed[*]}"
   exit 1

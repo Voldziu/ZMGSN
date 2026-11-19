@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from tool_eval.config import get_settings
 from tool_eval.evaluation.checks import ArxivLookup
-from tool_eval.evaluation.report import load_records, render_markdown
+from tool_eval.evaluation.report import load_results, render_markdown, summarize, write_csv
 from tool_eval.evaluation.runner import arxiv_cache_dir, run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
 from tool_eval.exceptions import InvalidInputError, TrackingServerError
@@ -53,9 +53,25 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--temperature", type=float, default=0.7)
     run.add_argument("--output", type=Path, default=DEFAULT_RESULTS)
     run.add_argument("--runs-dir", type=Path, default=Path("workspace/runs"))
+    run.add_argument(
+        "--order-seed",
+        type=int,
+        help="seed of the level order within each block "
+        "(default: the seed recorded in --output, else random)",
+    )
 
-    report = commands.add_parser("report", help="summarize a results file")
-    report.add_argument("input", type=Path, nargs="?", default=DEFAULT_RESULTS)
+    report = commands.add_parser("report", help="summarize one or more results files")
+    report.add_argument(
+        "inputs",
+        type=Path,
+        nargs="*",
+        default=[DEFAULT_RESULTS],
+        metavar="input",
+        help=f"results files, for example one per model (default: {DEFAULT_RESULTS})",
+    )
+    report.add_argument(
+        "--csv", type=Path, help="also write one row per model and level to this CSV file"
+    )
     return parser
 
 
@@ -79,17 +95,23 @@ def _run(args: argparse.Namespace) -> int:
             timeout=settings.http_timeout_seconds,
             cache_dir=arxiv_cache_dir(settings, args.runs_dir),
         ),
+        order_seed=args.order_seed,
     )
     logger.info("Executed %d runs; results in %s", executed, args.output)
     return 0
 
 
 def _report(args: argparse.Namespace) -> int:
-    if not args.input.is_file():
-        msg = f"Results file not found: {args.input}"
+    missing = [str(path) for path in args.inputs if not path.is_file()]
+    if missing:
+        msg = f"Results file not found: {', '.join(missing)}"
         raise InvalidInputError(msg)
+    records = load_results(args.inputs)
     # The report is the program's output, so it goes to stdout rather than the log.
-    print(render_markdown(load_records(args.input)))  # noqa: T201
+    print(render_markdown(records))  # noqa: T201
+    if args.csv:
+        write_csv(summarize(records), args.csv)
+        logger.info("Wrote %s", args.csv)
     return 0
 
 
