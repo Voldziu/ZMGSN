@@ -23,5 +23,5 @@ Logging SHALL NOT change the agent's behaviour, the run records or the configura
 When the loop guard stops a run, the run's end line SHALL show the status `loop`, and the log SHALL get one WARNING line that names the signal and the call or tool that triggered it.
 
 #### Scenario: Repeated review call
-- **WHEN** the guard stops a run before the fifth identical `conduct_literature_review` call
+- **WHEN** the guard stops a run before the eighth identical `conduct_literature_review` call
 - **THEN** the log has a warning naming that call and an end line with status `loop` and no success

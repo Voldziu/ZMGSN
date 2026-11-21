@@ -46,17 +46,17 @@ In `on_llm_end` of an agent reply, the guard walks the reply's parsed `tool_call
 If LangChain or LangGraph wraps the exception, the runner unwraps it via `__cause__`/`__context__`; a test with the real `create_agent` loop pins down which applies.
 
 ### Settings and record
-- `Settings.agent_max_repeated_calls: int = Field(default=5, ge=0)` and `agent_max_tool_error_streak: int = Field(default=10, ge=0)`, from `AGENT_MAX_REPEATED_CALLS` and `AGENT_MAX_TOOL_ERROR_STREAK`; 0 switches a check off.
+- `Settings.agent_max_repeated_calls: int = Field(default=8, ge=0)` and `agent_max_tool_error_streak: int = Field(default=10, ge=0)`, from `AGENT_MAX_REPEATED_CALLS` and `AGENT_MAX_TOOL_ERROR_STREAK`; 0 switches a check off.
 - Both enter `config_fingerprint`, the MLflow parameters, and `RunRecord` as `max_repeated_calls: int | None = None` and `max_tool_error_streak: int | None = None` (None for older records).
 - `RunStatus` gains `"loop"`; `LevelSummary` gains `loop_runs`, and the quality table a `loop` column after `step limit`.
 
-### Defaults: 5 identical calls, 10 failed calls
-- **5 identical calls in a row.** The warning fires at 3; two more confirm the loop. A sound run has no reason to repeat a call five times with nothing in between: a transient arXiv failure is already retried inside the client. In the observed loop, stopping at 5 instead of 100 saves about 95 reviews.
+### Defaults: 8 identical calls, 10 failed calls
+- **8 identical calls in a row.** The first draft used 5. In the RTX screen on 2026-11-21, qwen at level 2 (`level2-protein-2022h2-01`) called `write_review({})` four times in a row (the long `markdown` argument was lost, so validation failed each time) and then finished with a success; at level 3 it repeated `conduct_literature_review` three times in a row before finishing. A limit of 5 left a margin of one call, so the default is 8. In the observed qwen-weak loop, stopping at 8 instead of 100 still saves about 92 reviews.
 - **10 failed calls in a row.** Searches with no result are tool errors, and a weak model may legitimately try several queries before one works; 10 leaves room for that. The observed streak was 99.
 
 ## Risks / Trade-offs
 
-- [A sound run is stopped] → Check the 90 pilot runs' MLflow traces on the RTX before the full experiment: no `completed` run may contain 5 identical calls in a row or 10 failed calls in a row. If one does, raise the default before the full run, not after.
+- [A sound run is stopped] → Check the 90 pilot runs' MLflow traces on the RTX before the full experiment: no `completed` run may contain 8 identical calls in a row or 10 failed calls in a row. If one does, raise the default before the full run, not after.
 - [Cost metrics of weak models drop] → Loop runs now stop early, so tokens per run and wall time of qwen-weak fall. Tokens per success are unaffected (loop runs never succeed). The paper must say that loop runs are cut short; `methods.tex` gets a sentence.
 - [Old results cannot be resumed] → Intended: the hash changes. The pilot files move to `results/old/` before the full run; `report` still reads them.
 - [The exception is swallowed by a LangChain layer] → Covered by an end-to-end test with the real `create_agent` loop and a fake model, for both signals.

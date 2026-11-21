@@ -7,7 +7,7 @@ Some runs are lost long before the step limit ends them, and the full experiment
 ## What Changes
 
 - **Loop guard:** the agent's run stops as soon as it is clearly stuck, on either of two signals counted on the agent's own tool calls (tool-internal model calls do not count):
-  - **repeated call:** the agent requests the same tool call (same tool, same arguments) for the `AGENT_MAX_REPEATED_CALLS`-th time in a row, default **5**. The run stops before that call executes.
+  - **repeated call:** the agent requests the same tool call (same tool, same arguments) for the `AGENT_MAX_REPEATED_CALLS`-th time in a row, default **8**. The run stops before that call executes.
   - **error streak:** `AGENT_MAX_TOOL_ERROR_STREAK` tool calls in a row fail, default **10**. The run stops before the next reply of the agent's model.
   - `0` switches a signal off.
 - **New run status `loop`:** a stopped run is recorded with status `loop` and an error message naming the signal and the call. Like `step_limit`, it is scored (partial credit) but never a success.

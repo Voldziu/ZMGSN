@@ -79,7 +79,7 @@ Gated models need `HF_TOKEN` (in `.env` for Docker, exported in the shell for ma
 
 Per-preset client behaviour: `llama` gets one tool call per reply (`parallel_tool_calls: false`), because its chat template rejects several tool calls in one message; the other presets keep parallel calls. `LLM_PARALLEL_TOOL_CALLS=true|false` overrides this for any preset. Runs allow 100 model calls (`AGENT_MAX_STEPS`) and 8192 output tokens per reply (`LLM_MAX_TOKENS`), enough for models that call one tool per turn and for writing a whole review in one call.
 
-A loop guard stops a run whose agent is clearly stuck and records it with status `loop`: when the agent requests the same tool call (same tool, same arguments) for the 5th time in a row (`AGENT_MAX_REPEATED_CALLS`; the call does not execute), or after 10 failed tool calls in a row (`AGENT_MAX_TOOL_ERROR_STREAK`; the model is not called again). Tool-internal model calls do not count, and `0` switches a check off. Both limits are part of the configuration hash, so results files written before the guard existed cannot be resumed; move them aside (for example to `results/old/`), `report` still reads them.
+A loop guard stops a run whose agent is clearly stuck and records it with status `loop`: when the agent requests the same tool call (same tool, same arguments) for the 8th time in a row (`AGENT_MAX_REPEATED_CALLS`; the call does not execute), or after 10 failed tool calls in a row (`AGENT_MAX_TOOL_ERROR_STREAK`; the model is not called again). Tool-internal model calls do not count, and `0` switches a check off. Both limits are part of the configuration hash, so results files written before the guard existed cannot be resumed; move them aside (for example to `results/old/`), `report` still reads them.
 
 ## Evaluate
 
@@ -168,7 +168,7 @@ Between them, each step of the agent gets short DEBUG lines, written as soon as 
 - **Tool call:** `[<run_id>] #n read_file(path='reviews/review.md') -> ok, 0.1 s: <result>` or `-> error, 0.4 s: InvalidInputError: <message>`, where `#n` is the reply that requested it. Model calls made inside a tool get no lines of their own; the tool's line counts them, for example `31 model calls in 1150.2 s`.
 - Arguments, results and text are cut to 150 characters and kept on one line. The full messages are in the MLflow trace.
 
-Two warnings point at a run that seems stuck in a loop: `same tool call 3 times in a row: <call>`, when the agent repeats a call with the same arguments, and `5 tool calls in a row failed; the last one: <tool>`. Each is written at most once per run. They only observe: the run goes on until the agent stops, the loop guard stops it (at the 5th identical call or the 10th failed call, with a `loop guard stopped the run: …` warning) or the step limit ends it.
+Two warnings point at a run that seems stuck in a loop: `same tool call 3 times in a row: <call>`, when the agent repeats a call with the same arguments, and `5 tool calls in a row failed; the last one: <tool>`. Each is written at most once per run. They only observe: the run goes on until the agent stops, the loop guard stops it (at the 8th identical call or the 10th failed call, with a `loop guard stopped the run: …` warning) or the step limit ends it.
 
 ## Tracing with MLflow
 

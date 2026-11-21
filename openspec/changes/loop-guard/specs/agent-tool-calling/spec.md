@@ -3,11 +3,11 @@
 ## ADDED Requirements
 
 ### Requirement: Repeated identical calls stop the run
-When the agent's model requests the same tool call, meaning the same tool with the same arguments, for the `AGENT_MAX_REPEATED_CALLS`-th time in a row (default 5), the run SHALL stop before that call executes and SHALL be recorded with status `loop`. Tool calls made inside a tool SHALL NOT count. A value of 0 SHALL switch this check off.
+When the agent's model requests the same tool call, meaning the same tool with the same arguments, for the `AGENT_MAX_REPEATED_CALLS`-th time in a row (default 8), the run SHALL stop before that call executes and SHALL be recorded with status `loop`. Tool calls made inside a tool SHALL NOT count. A value of 0 SHALL switch this check off.
 
 #### Scenario: Same review requested again and again
-- **WHEN** a level-3 agent calls `conduct_literature_review` with the same query four times in a row and then requests it a fifth time
-- **THEN** the fifth call does not execute, and the run is recorded as `loop` with an error naming `conduct_literature_review` and its arguments
+- **WHEN** a level-3 agent calls `conduct_literature_review` with the same query seven times in a row and then requests it an eighth time
+- **THEN** the eighth call does not execute, and the run is recorded as `loop` with an error naming `conduct_literature_review` and its arguments
 
 #### Scenario: Different arguments
 - **WHEN** the agent calls `search_arxiv` ten times in a row with a different query each time
@@ -19,7 +19,7 @@ When the agent's model requests the same tool call, meaning the same tool with t
 
 #### Scenario: Several identical calls in one reply
 - **GIVEN** a model that may request several tool calls in one reply
-- **WHEN** one reply requests the same call five times
+- **WHEN** one reply requests the same call eight times
 - **THEN** the run stops before any of those calls executes and is recorded as `loop`
 
 #### Scenario: Check switched off

@@ -40,7 +40,7 @@ Each run record SHALL store the two loop-guard limits it ran with. Records writt
 
 #### Scenario: New record
 - **WHEN** a run executes with default settings
-- **THEN** its record stores 5 as the repeated-call limit and 10 as the error-streak limit
+- **THEN** its record stores 8 as the repeated-call limit and 10 as the error-streak limit
 
 #### Scenario: Older record
 - **WHEN** `report` reads a results file written before this change

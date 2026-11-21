@@ -2,8 +2,8 @@
 
 ## 1. Settings, status and record
 
-- [x] 1.1 Add `agent_max_repeated_calls` (default 5, ≥ 0) and `agent_max_tool_error_streak` (default 10, ≥ 0) to `Settings`. Verify with tests that the defaults are 5 and 10, that `AGENT_MAX_REPEATED_CALLS=0` is accepted and that a negative value is rejected.
-- [x] 1.2 Add both limits to `config_fingerprint`, the run's MLflow parameters and `RunRecord` (`max_repeated_calls`, `max_tool_error_streak`, both `int | None = None`), and add `"loop"` to `RunStatus`. Verify with tests that changing either limit changes the hash, that a new record stores 5 and 10, and that a record line without the fields still loads with both unknown.
+- [x] 1.1 Add `agent_max_repeated_calls` (default 8, ≥ 0) and `agent_max_tool_error_streak` (default 10, ≥ 0) to `Settings`. Verify with tests that the defaults are 8 and 10, that `AGENT_MAX_REPEATED_CALLS=0` is accepted and that a negative value is rejected.
+- [x] 1.2 Add both limits to `config_fingerprint`, the run's MLflow parameters and `RunRecord` (`max_repeated_calls`, `max_tool_error_streak`, both `int | None = None`), and add `"loop"` to `RunStatus`. Verify with tests that changing either limit changes the hash, that a new record stores 8 and 10, and that a record line without the fields still loads with both unknown.
 - [x] 1.3 Add `AgentLoopError(Exception)` to `exceptions.py`, outside the `ToolEvalError` hierarchy. Verify with a test that it is not a `ToolEvalError`.
 
 ## 2. The guard
@@ -16,7 +16,7 @@
   - model calls made while a tool run is active count for neither check;
   - a limit of 0 switches its check off.
 - [x] 2.2 Pass the guard last in the runner's callbacks and map `AgentLoopError` to status `loop` with its message as `error`, a WARNING line, and scoring as for `step_limit`. Verify with runner tests through the real `create_agent` loop and a fake model:
-  - a fake that repeats one `read_file` call forever ends as `loop` after 4 executed calls, with the end line `end: loop, success=False, ...` and the warning in the log;
+  - a fake that repeats one `read_file` call forever ends as `loop` after 7 executed calls, with the end line `end: loop, success=False, ...` and the warning in the log;
   - a fake whose tool calls all fail ends as `loop` after 10 tool errors, and the fake is not called an eleventh time;
   - a fake that finishes normally is unaffected, and one that alternates two calls ends as `step_limit` with `agent_max_steps=6`;
   - a `loop` run whose review passes every check has score 1.0 and no success.
@@ -29,7 +29,7 @@
 ## 4. Integration
 
 - [x] 4.1 Run `make test` (pytest, ruff, mypy) and verify that it passes.
-- [ ] 4.2 On the RTX, query the pilot runs' MLflow traces and verify that no `completed` run has 5 identical tool calls in a row or 10 failed tool calls in a row; if one does, raise the default and record why in design.md.
+- [ ] 4.2 On the RTX, query the pilot runs' MLflow traces and verify that no `completed` run has 8 identical tool calls in a row or 10 failed tool calls in a row; if one does, raise the default and record why in design.md.
 - [ ] 4.3 On the RTX, after moving the pilot results to `results/old/`, run `make eval-presets PRESETS=qwen-weak REPEATS=1 ONLY= LEVELS="level1 level2 level3"` and verify that level-3 loops end as `loop` well before the step limit.
 
 ## Workflow follow-up

@@ -204,8 +204,8 @@ def test_repeating_agent_ends_as_loop(tmp_path: Path, monkeypatch: pytest.Monkey
     assert record.status == "loop"
     assert record.error is not None and "read_file" in record.error
     assert not record.success
-    assert record.cost.tool_calls == 4
-    assert record.max_repeated_calls == 5
+    assert record.cost.tool_calls == 7
+    assert record.max_repeated_calls == 8
     assert record.max_tool_error_streak == 10
     assert any("WARNING" in line and "loop guard stopped the run" in line for line in lines)
     assert any("end: loop, success=False, " in line for line in lines)

@@ -39,7 +39,7 @@ def test_default_step_limit_is_100() -> None:
 
 def test_loop_guard_defaults_and_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(_env_file=None)
-    assert settings.agent_max_repeated_calls == 5
+    assert settings.agent_max_repeated_calls == 8
     assert settings.agent_max_tool_error_streak == 10
     monkeypatch.setenv("AGENT_MAX_REPEATED_CALLS", "0")
     assert Settings(_env_file=None).agent_max_repeated_calls == 0
