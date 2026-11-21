@@ -19,6 +19,7 @@ from tool_eval.agent import build_agent, run_task
 from tool_eval.config import Settings, use_settings
 from tool_eval.evaluation.checks import CHECKS_VERSION, Lookup, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
+from tool_eval.evaluation.loop_guard import LoopGuard
 from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
 from tool_eval.evaluation.steps import StepLogger
 from tool_eval.evaluation.tracing import (
@@ -27,7 +28,7 @@ from tool_eval.evaluation.tracing import (
     traced_run,
     tracing_enabled,
 )
-from tool_eval.exceptions import ExternalServiceError, InvalidInputError
+from tool_eval.exceptions import AgentLoopError, ExternalServiceError, InvalidInputError
 from tool_eval.prompts import load_prompt
 from tool_eval.services.reports import REVIEW_PATH
 from tool_eval.tools.registry import TOOLSET_VERSION, TOOLSETS
@@ -51,6 +52,8 @@ def config_fingerprint(settings: Settings) -> str:
         "model": settings.llm_model,
         "temperature": settings.agent_temperature,
         "max_steps": settings.agent_max_steps,
+        "max_repeated_calls": settings.agent_max_repeated_calls,
+        "max_tool_error_streak": settings.agent_max_tool_error_streak,
         "parallel_tool_calls": settings.effective_parallel_tool_calls,
         "toolset_version": TOOLSET_VERSION,
         "checks_version": CHECKS_VERSION,
@@ -290,6 +293,8 @@ def run_single(
         "order_seed": order_seed,
         "block_position": block_position,
         "max_steps": run_settings.agent_max_steps,
+        "max_repeated_calls": run_settings.agent_max_repeated_calls,
+        "max_tool_error_streak": run_settings.agent_max_tool_error_streak,
         "llm_max_tokens": run_settings.llm_max_tokens,
         "temperature": run_settings.agent_temperature,
         "parallel_tool_calls": run_settings.effective_parallel_tool_calls,
@@ -323,13 +328,18 @@ def run_single(
             tool_names = [tool.name for tool in TOOLSETS.get(level, ())]
             meter = RunMeter(tool_names=tool_names)
             steps = StepLogger(tool_names=tool_names)
+            # Last, so the meter and the step log see the reply that makes the guard stop.
+            guard = LoopGuard(
+                max_repeated_calls=run_settings.agent_max_repeated_calls,
+                max_tool_error_streak=run_settings.agent_max_tool_error_streak,
+            )
             try:
                 agent = build_agent(level, settings=run_settings)
                 messages = run_task(
                     agent,
                     task,
                     max_steps=run_settings.agent_max_steps,
-                    callbacks=[meter, steps],
+                    callbacks=[meter, steps, guard],
                     run_name=run_id,
                     tags=[level, scenario.id],
                     metadata={"level": level, "scenario_id": scenario.id, "repeat": repeat},
@@ -342,6 +352,10 @@ def run_single(
                     )
             except GraphRecursionError:
                 status = "step_limit"
+            except AgentLoopError as exc:
+                status = "loop"
+                error = str(exc)
+                logger.warning("loop guard stopped the run: %s", exc)
             except Exception as exc:  # noqa: BLE001 - recorded, not hidden
                 logger.exception("Run %s failed", run_id)
                 status = "failed" if _is_context_overflow(exc) else "error"
@@ -374,6 +388,8 @@ def run_single(
             model=run_settings.llm_model,
             temperature=run_settings.agent_temperature,
             max_steps=run_settings.agent_max_steps,
+            max_repeated_calls=run_settings.agent_max_repeated_calls,
+            max_tool_error_streak=run_settings.agent_max_tool_error_streak,
             prompt_version=run_settings.prompt_version,
             system_prompt_sha256=system_prompt.sha256,
             task_prompt_sha256=task_prompt.sha256,

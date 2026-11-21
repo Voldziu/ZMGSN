@@ -171,7 +171,7 @@ def test_level_with_only_errors_has_undefined_rates_and_means(tmp_path: Path) ->
 
     text = render_markdown(records)
     [quality] = [line for line in text.splitlines() if line.startswith("| qwen | level1 | 0 | 0 |")]
-    assert quality == "| qwen | level1 | 0 | 0 | - | - | - | 0 | 0 | 1 |"
+    assert quality == "| qwen | level1 | 0 | 0 | - | - | - | 0 | 0 | 0 | 1 |"
     assert "| qwen | - | 100% [21–100%] n=1 |" in text
 
     out = tmp_path / "summary.csv"

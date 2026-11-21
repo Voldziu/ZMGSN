@@ -6,7 +6,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 # `failed`: agent broke the run (e.g. context overflow), scored; `error`: infrastructure, retried.
-RunStatus = Literal["completed", "step_limit", "failed", "error"]
+RunStatus = Literal["completed", "step_limit", "loop", "failed", "error"]
 
 
 class Scenario(BaseModel):
@@ -147,6 +147,10 @@ class RunRecord(BaseModel):
     model: str
     temperature: float
     max_steps: int
+    # Loop-guard limits (AGENT_MAX_REPEATED_CALLS, AGENT_MAX_TOOL_ERROR_STREAK); unknown in
+    # records written before the loop guard existed.
+    max_repeated_calls: int | None = None
+    max_tool_error_streak: int | None = None
     prompt_version: str
     system_prompt_sha256: str
     task_prompt_sha256: str
@@ -175,7 +179,7 @@ class RunRecord(BaseModel):
     def success(self) -> bool:
         """Whether the run succeeded: it completed and passed every check.
 
-        `step_limit` and `failed` runs never succeed, even when every check passed; their
+        `step_limit`, `loop` and `failed` runs never succeed, even when every check passed; their
         `outcome.score` still gives partial credit. The value is written to the results file
         but recomputed on every read, so records written before this rule follow it too.
         """

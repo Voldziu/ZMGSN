@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from tool_eval.config import Settings
 from tool_eval.llm import build_chat_model
@@ -34,6 +35,16 @@ def test_chat_model_sends_max_tokens_and_thinking_flag() -> None:
 
 def test_default_step_limit_is_100() -> None:
     assert Settings(_env_file=None).agent_max_steps == 100
+
+
+def test_loop_guard_defaults_and_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings(_env_file=None)
+    assert settings.agent_max_repeated_calls == 5
+    assert settings.agent_max_tool_error_streak == 10
+    monkeypatch.setenv("AGENT_MAX_REPEATED_CALLS", "0")
+    assert Settings(_env_file=None).agent_max_repeated_calls == 0
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, agent_max_tool_error_streak=-1)
 
 
 @pytest.mark.parametrize(

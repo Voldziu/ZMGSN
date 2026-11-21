@@ -23,3 +23,7 @@ class PromptNotFoundError(ToolEvalError):
 
 class TrackingServerError(ToolEvalError):
     """MLflow tracing is switched on but its tracking server is not reachable or not healthy."""
+
+
+class AgentLoopError(Exception):
+    """The loop guard stopped a run whose agent is stuck; never reported back to the agent."""

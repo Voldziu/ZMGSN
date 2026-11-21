@@ -79,6 +79,8 @@ Gated models need `HF_TOKEN` (in `.env` for Docker, exported in the shell for ma
 
 Per-preset client behaviour: `llama` gets one tool call per reply (`parallel_tool_calls: false`), because its chat template rejects several tool calls in one message; the other presets keep parallel calls. `LLM_PARALLEL_TOOL_CALLS=true|false` overrides this for any preset. Runs allow 100 model calls (`AGENT_MAX_STEPS`) and 8192 output tokens per reply (`LLM_MAX_TOKENS`), enough for models that call one tool per turn and for writing a whole review in one call.
 
+A loop guard stops a run whose agent is clearly stuck and records it with status `loop`: when the agent requests the same tool call (same tool, same arguments) for the 5th time in a row (`AGENT_MAX_REPEATED_CALLS`; the call does not execute), or after 10 failed tool calls in a row (`AGENT_MAX_TOOL_ERROR_STREAK`; the model is not called again). Tool-internal model calls do not count, and `0` switches a check off. Both limits are part of the configuration hash, so results files written before the guard existed cannot be resumed; move them aside (for example to `results/old/`), `report` still reads them.
+
 ## Evaluate
 
 Several presets in one go (starts and stops each server itself, on macOS or with Docker; no server may be running):
@@ -125,14 +127,14 @@ uv run python -m tool_eval.main report results/presets-*.jsonl --csv results/sum
 
 Scenarios are in `scenarios/scenarios.json`. Run options: `--scenarios`, `--only`, `--levels`, `--repeats`, `--temperature`, `--output`, `--runs-dir`, `--order-seed`.
 
-A run is successful only if it completed (it neither hit the step limit nor failed) and every check passes, including `papers_read`: every paper cited in the review must have had its full text extracted in that run's workspace (`texts/<id>.txt`). Reviews written from search results or abstracts fail it. Runs that hit the step limit or failed keep their score (the fraction of passed checks) as partial credit. Each record stores the verdict as `success`; `outcome.success` only says whether every check passed. The report applies the rule to older results files too.
+A run is successful only if it completed (it neither hit the step limit, nor was stopped by the loop guard, nor failed) and every check passes, including `papers_read`: every paper cited in the review must have had its full text extracted in that run's workspace (`texts/<id>.txt`). Reviews written from search results or abstracts fail it. Runs that hit the step limit, ended as `loop` or failed keep their score (the fraction of passed checks) as partial credit. Each record stores the verdict as `success`; `outcome.success` only says whether every check passed. The report applies the rule to older results files too.
 
 ## Report
 
 `report FILE...` combines results files, for example one per model, and summarises every model and level. It uses the scored runs: every run except those with an infrastructure error. It stops if a run of one model appears twice, whatever its configuration: a file passed twice, or two results files of the same model such as `smoke-qwen.jsonl` and `presets-qwen.jsonl`. The error names the run and both files. It warns when one model's runs come from different configurations. A value without data, such as the success rate of a level whose runs all ended in errors or repeatability with one repeat, is undefined (`-`), not zero. Sections:
 
 - **Overview:** the success rate with its 95% Wilson interval, per model × level.
-- **Quality:** successes, mean score, and runs that hit the step limit, failed or had errors.
+- **Quality:** successes, mean score, and runs that hit the step limit, were stopped by the loop guard (`loop`), failed or had errors.
 - **Stability:** pass^k for k = 1..10. For each scenario it is C(c,k)/C(n,k), with c successes in n scored runs, averaged over scenarios. It is undefined above the fewest scored runs of any scenario.
 - **Tool calls:** the tool-error rate (per tool call), the malformed-call rate (per attempted call: tool calls plus malformed calls) and the malformed calls per run.
 - **Cost and time:** means per run of:
@@ -166,7 +168,7 @@ Between them, each step of the agent gets short DEBUG lines, written as soon as 
 - **Tool call:** `[<run_id>] #n read_file(path='reviews/review.md') -> ok, 0.1 s: <result>` or `-> error, 0.4 s: InvalidInputError: <message>`, where `#n` is the reply that requested it. Model calls made inside a tool get no lines of their own; the tool's line counts them, for example `31 model calls in 1150.2 s`.
 - Arguments, results and text are cut to 150 characters and kept on one line. The full messages are in the MLflow trace.
 
-Two warnings point at a run that seems stuck in a loop: `same tool call 3 times in a row: <call>`, when the agent repeats a call with the same arguments, and `5 tool calls in a row failed; the last one: <tool>`. Each is written at most once per run. They only observe: the run goes on until the agent stops or the step limit ends it, and its record does not change.
+Two warnings point at a run that seems stuck in a loop: `same tool call 3 times in a row: <call>`, when the agent repeats a call with the same arguments, and `5 tool calls in a row failed; the last one: <tool>`. Each is written at most once per run. They only observe: the run goes on until the agent stops, the loop guard stops it (at the 5th identical call or the 10th failed call, with a `loop guard stopped the run: …` warning) or the step limit ends it.
 
 ## Tracing with MLflow
 

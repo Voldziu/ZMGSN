@@ -42,6 +42,7 @@ class LevelSummary(BaseModel):
     error_runs: int
     failed_runs: int
     step_limit_runs: int
+    loop_runs: int  # stopped by the loop guard
     # Quality. A success is a completed run that passed every check (`RunRecord.success`).
     successes: int
     success_rate: float | None
@@ -250,7 +251,8 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
         "# Evaluation report",
         *_configuration_warnings(records),
         "Metrics use the scored runs: every run except those with an infrastructure error. "
-        "A run succeeds only if it completed (no step limit, not failed) and passed every check. "
+        "A run succeeds only if it completed (no step limit, no loop, not failed) and passed every "
+        "check. "
         f"`{_MISSING}` marks a value that is undefined or that no run measured.",
         "## Overview: success rate [95% Wilson interval]",
         format_markdown_table(["model", *levels], _overview_rows(summaries, levels)),
@@ -265,6 +267,7 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
                 "95% CI",
                 "score",
                 "step limit",
+                "loop",
                 "failed",
                 "errors",
             ],
@@ -278,6 +281,7 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
                     _interval(s.success_ci_low, s.success_ci_high),
                     _num(s.mean_score, 2),
                     str(s.step_limit_runs),
+                    str(s.loop_runs),
                     str(s.failed_runs),
                     str(s.error_runs),
                 ]
@@ -461,6 +465,7 @@ def _summarize_group(model: str, level: str, items: Sequence[RunRecord]) -> Leve
         error_runs=len(items) - len(valid),
         failed_runs=sum(r.status == "failed" for r in valid),
         step_limit_runs=sum(r.status == "step_limit" for r in valid),
+        loop_runs=sum(r.status == "loop" for r in valid),
         successes=successes,
         success_rate=success_rate,
         success_ci_low=interval[0] if interval else None,

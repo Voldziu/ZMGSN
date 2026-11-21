@@ -40,6 +40,10 @@ class Settings(BaseSettings):
 
     # One-tool-per-turn models need up to ~33 calls for a five-paper review; 100 leaves room.
     agent_max_steps: int = Field(default=100, ge=1)
+    # Loop guard: stop a run when the agent requests the same tool call this many times in a
+    # row, or when this many tool calls in a row fail. 0 switches a check off.
+    agent_max_repeated_calls: int = Field(default=5, ge=0)
+    agent_max_tool_error_streak: int = Field(default=10, ge=0)
     agent_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     prompt_version: str = "v2"
 

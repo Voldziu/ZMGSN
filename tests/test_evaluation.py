@@ -865,7 +865,12 @@ def test_repeatability_skips_scenarios_with_a_single_run() -> None:
 def test_fingerprint_covers_step_limit_and_parallel_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    for name in ("AGENT_MAX_STEPS", "LLM_PARALLEL_TOOL_CALLS"):
+    for name in (
+        "AGENT_MAX_STEPS",
+        "AGENT_MAX_REPEATED_CALLS",
+        "AGENT_MAX_TOOL_ERROR_STREAK",
+        "LLM_PARALLEL_TOOL_CALLS",
+    ):
         monkeypatch.delenv(name, raising=False)
 
     def fingerprint(**extra: Any) -> str:
@@ -873,7 +878,20 @@ def test_fingerprint_covers_step_limit_and_parallel_policy(
 
     base = fingerprint()
     assert fingerprint(agent_max_steps=10) != base
+    assert fingerprint(agent_max_repeated_calls=0) != base
+    assert fingerprint(agent_max_tool_error_streak=3) != base
     assert fingerprint(llm_parallel_tool_calls=False) != base
+
+
+def test_records_carry_the_loop_guard_limits() -> None:
+    record = _record("level1", "a", 1, score=1.0, tokens=10)
+    data = json.loads(record.model_dump_json())
+    assert data["max_repeated_calls"] is None
+    new_fields = {"max_repeated_calls", "max_tool_error_streak"}
+    old = {k: v for k, v in data.items() if k not in new_fields}
+    loaded = RunRecord.model_validate(old)
+    assert loaded.max_repeated_calls is None
+    assert loaded.max_tool_error_streak is None
 
 
 def test_fingerprint_covers_toolset_version(
