@@ -29,9 +29,11 @@
 ## 4. Integration
 
 - [x] 4.1 Run `make test` (pytest, ruff, mypy) and verify that it passes.
-- [ ] 4.2 On the RTX, query the pilot runs' MLflow traces and verify that no `completed` run has 8 identical tool calls in a row or 10 failed tool calls in a row; if one does, raise the default and record why in design.md.
-- [ ] 4.3 On the RTX, after moving the pilot results to `results/old/`, run `make eval-presets PRESETS=qwen-weak REPEATS=1 ONLY= LEVELS="level1 level2 level3"` and verify that level-3 loops end as `loop` well before the step limit.
+- [x] 4.2 On the RTX, query the pilot runs' MLflow traces and verify that no `completed` run has 8 identical tool calls in a row or 10 failed tool calls in a row; if one does, raise the default and record why in design.md.
+- [x] 4.3 On the RTX, after moving the pilot results to `results/old/`, run `make eval-presets PRESETS=qwen-weak REPEATS=1 ONLY= LEVELS="level1 level2 level3"` and verify that level-3 loops end as `loop` well before the step limit.
 
 ## Workflow follow-up
 
 - Archive the change after the RTX checks.
+
+Notes on 4.2 and 4.3 (2026-11-21): the MLflow trace scan was superseded by the RTX screen (150 runs, 5 models, run with the guard on at `max_repeated_calls=5`, `max_tool_error_streak=10`). Every `completed` run stayed below 5 identical calls in a row and below 10 failed calls in a row, or the guard would have stopped it, so no completed run reaches the defaults of 8 and 10. qwen-weak level 3 ended as `loop` in 9 of 10 runs, at about 70 s each instead of the step limit. On the Mac, the guard stopped qwen-mid `level3-xai-2022-01` at the 8th identical call.

@@ -39,7 +39,7 @@ Evaluation runs SHALL be recorded in MLflow when `MLFLOW_TRACKING_URI` is set, a
 
 ### Requirement: Each evaluation run is an MLflow run
 With tracing enabled, each evaluation run SHALL be logged as one MLflow run in the configured experiment (default `tool-eval`). The MLflow run SHALL carry:
-- **parameters:** model, level, scenario, repeat, seed, order seed, position in the block, step limit, temperature, prompt version, tool-set version, checks version and config hash;
+- **parameters:** model, level, scenario, repeat, seed, order seed, position in the block, step limit, loop-guard limits, temperature, prompt version, tool-set version, checks version and config hash;
 - **metrics:** score, success (under the success rule), model calls, tool calls, tool errors, malformed tool calls, tokens (including the total and the first agent call's input tokens), model and tool time, and wall time;
 - **tags:** status and error;
 - **artifacts:** the review file and the run record.
@@ -61,6 +61,10 @@ A measurement that the run's record does not know SHALL NOT be logged.
 #### Scenario: Prompt overhead and time
 - **WHEN** a run is logged
 - **THEN** its metrics include the total tokens, the first agent call's input tokens, the agent and tool-internal model time and the tool time
+
+#### Scenario: Loop run
+- **WHEN** the loop guard stopped a run
+- **THEN** its `status` tag is `loop`, its `error` tag names the signal, and its `success` metric is 0
 
 ### Requirement: One trace per run holds every call
 With tracing enabled, each evaluation run SHALL produce exactly one trace, linked to its MLflow run. The trace SHALL contain every agent model call, every tool call, and every model call made inside a tool, nested under the tool that made it. It SHALL record token usage per model call, and it SHALL mark failed tool calls as errors that carry the exception type and message.

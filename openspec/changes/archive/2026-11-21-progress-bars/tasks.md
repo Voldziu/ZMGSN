@@ -10,4 +10,4 @@
 ## 2. Integration
 
 - [x] 2.1 Run `make test` and verify that it passes.
-- [ ] 2.2 Run `make eval-presets PRESETS=qwen-mid REPEATS=1 ONLY="..." LEVELS="level1 level2 level3"` on the Mac in a terminal and verify that the four bars show and update.
+- [x] 2.2 Run `make eval-presets PRESETS=qwen-mid REPEATS=1 ONLY="..." LEVELS="level1 level2 level3"` on the Mac in a terminal and verify that the four bars show and update.

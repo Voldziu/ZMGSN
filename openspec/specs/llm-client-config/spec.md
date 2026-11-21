@@ -63,6 +63,7 @@ The client SHALL ask the server for at most one tool call per reply when the act
 ### Requirement: Results record the settings that change them
 Each run record SHALL carry a configuration hash that covers:
 - the step limit;
+- the loop-guard limits (`AGENT_MAX_REPEATED_CALLS` and `AGENT_MAX_TOOL_ERROR_STREAK`);
 - the effective parallel-tool-call policy;
 - the version of the tool definitions;
 - the version of the outcome checks;
@@ -72,6 +73,10 @@ Runs whose hashes differ SHALL NOT be treated as comparable.
 
 #### Scenario: Step limit changes the hash
 - **WHEN** two runs differ only in `AGENT_MAX_STEPS`
+- **THEN** their configuration hashes differ
+
+#### Scenario: Loop-guard limits change the hash
+- **WHEN** two runs differ only in `AGENT_MAX_REPEATED_CALLS`, or only in `AGENT_MAX_TOOL_ERROR_STREAK`
 - **THEN** their configuration hashes differ
 
 #### Scenario: Parallel-call policy changes the hash
@@ -101,3 +106,14 @@ Each evaluation run SHALL draw a fresh random sampling seed. It SHALL send that 
 #### Scenario: Seed does not split comparable runs
 - **WHEN** two runs differ only in their seeds
 - **THEN** their configuration hashes are equal
+
+### Requirement: Run records carry the loop-guard limits
+Each run record SHALL store the two loop-guard limits it ran with. Records written before the loop guard existed SHALL still load, with both limits unknown.
+
+#### Scenario: New record
+- **WHEN** a run executes with default settings
+- **THEN** its record stores 8 as the repeated-call limit and 10 as the error-streak limit
+
+#### Scenario: Older record
+- **WHEN** `report` reads a results file written before this change
+- **THEN** its records load, and their loop-guard limits are unknown

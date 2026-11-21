@@ -1,0 +1,75 @@
+## 1. Outcome model
+
+- [ ] 1.1 Add `facts` and `requirement` to `OutcomeScore`. Add `format_success` and `reliable` to `RunRecord`, plus an `artifact_valid(judgment)` helper. Keep `success` equal to `format_success`. Old records load.
+- [ ] 1.2 Raise `CHECKS_VERSION` to 3 and update the fingerprint tests.
+
+## 2. Deterministic checks
+
+- [ ] 2.1 Add `_cited_ids` (abs/pdf URLs and `arXiv:` ids, versions stripped) and the four fact checks.
+  - Use the screen cases as fixtures: llama `###` headings, a one-line file with literal `\n`, ids only in the bibliography, invented ids.
+- [ ] 2.2 Add the `table` requirement check. Tests: a table in the right place passes; a missing table fails; a table missing a paper fails; a table after the first paper section fails.
+- [ ] 2.3 Add the `polish` requirement check with `langdetect` (seeded), and add `langdetect` to the dependencies. Tests: Polish summaries pass; English fails; titles and citations are ignored.
+- [ ] 2.4 Wire the facts and the requirement into `evaluate_review` (`no_surveys` stays undefined).
+
+## 3. Judge
+
+- [ ] 3.1 Add Pydantic schemas `ReviewRating`, `SummaryRating` and `SurveyDecision`, and the prompts `judge_review`, `judge_summary` and `judge_survey` (v1).
+- [ ] 3.2 Add `evaluation/judge.py`:
+  - inputs: topic, requirement, review text, sampled sections plus source texts, metadata for surveys;
+  - structured calls with one retry;
+  - seeded section choice;
+  - `judge_hash`;
+  - `<results>.judge.jsonl` writing with skip-on-resume.
+
+  Tests use a fake structured LLM: blinding (no model, level or run id in the prompts), determinism, the missing-rating path, resume.
+- [ ] 3.3 Add the CLI `tool-eval judge` and the Makefile target `make judge PRESETS=... JUDGE=qwen`.
+
+## 4. Rescore
+
+- [ ] 4.1 Add `evaluation/rescore.py` and the CLI `tool-eval rescore`. Tests: the new file has facts added, the original is unchanged, and a missing workspace is listed.
+
+## 5. Statistics and report
+
+- [ ] 5.1 Add `paired_t_interval`, `sign_flip_p` (exact and Monte Carlo), `bca_interval` and `holm` to `stats.py`, with tests against known values.
+- [ ] 5.2 Rework `compare_levels`:
+  - per task type;
+  - all four outcomes;
+  - t-interval and p-value;
+  - ceiling and floor labels;
+  - log-token ratios (all and completed);
+  - tokens-per-success ratio with BCa.
+
+  Remove the percentile-bootstrap difference and update `tests/test_report.py`.
+- [ ] 5.3 Add the H1a box (non-inferiority with δ = 15 pp, the cost criterion, Holm across models) and the H1b comparison (variants, `level2 − level3`).
+- [ ] 5.4 Add the interaction contrasts for model pairs and level pairs, resampling scenarios jointly.
+- [ ] 5.5 Add excluded-run counts and the sensitivity line. Show judge ratings and fact pass rates. Have the report find `<results>.judge.jsonl` automatically.
+- [ ] 5.6 CSV: add the new columns and one row per model, level and task type.
+
+## 6. Docs, paper and presentation
+
+- [ ] 6.1 `README.md`: the three outcomes, the fact checks, `judge`, `rescore` and the report sections.
+- [ ] 6.2 `docs/overleaf/methods.tex`, evaluation section:
+  - the fact checks;
+  - the requirement checks;
+  - the judge (model, blinding, scales, threshold, structured output, determinism, self-preference limitation);
+  - the three outcomes and format compliance.
+- [ ] 6.3 `docs/overleaf/experiment_plan.tex`:
+  - primary outcome and family;
+  - H1a non-inferiority (δ = 15 pp) with the cost criterion and Holm;
+  - H1b on variants;
+  - RQ2/RQ3 as interactions;
+  - paired t-interval and sign-flip test;
+  - log tokens;
+  - tokens per success with BCa;
+  - excluded runs and sensitivity;
+  - everything else exploratory.
+- [ ] 6.4 `docs/presentations/src/progress-6-7.html`: a slide on the new metrics (facts, judge, two axes) and the analysis plan. Regenerate the PDF.
+
+## 7. Verification
+
+- [ ] 7.1 `make test`, ruff and mypy clean.
+- [ ] 7.2 Rescore the screen results in `results/old/screen-1121/` on the RTX and judge them with a served `qwen`. Check two things:
+  - the off-topic `qwen-weak level3-diffusion` run is not artifact valid;
+  - llama's `###`-heading reviews pass the fact checks.
+
+  Record the outcome in this file.
