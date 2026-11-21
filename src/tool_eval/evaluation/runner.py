@@ -7,6 +7,7 @@ import re
 import secrets
 import shutil
 from collections.abc import Iterable, Sequence
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from tool_eval.config import Settings, use_settings
 from tool_eval.evaluation.checks import CHECKS_VERSION, Lookup, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
+from tool_eval.evaluation.steps import StepLogger
 from tool_eval.evaluation.tracing import (
     start_tracing,
     stop_tracing,
@@ -29,7 +31,7 @@ from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.prompts import load_prompt
 from tool_eval.services.reports import REVIEW_PATH
 from tool_eval.tools.registry import TOOLSET_VERSION, TOOLSETS
-from tool_eval.utils.logger import get_logger
+from tool_eval.utils.logger import get_logger, run_context
 
 logger = get_logger(__name__)
 
@@ -142,7 +144,23 @@ def run_evaluation(
     done, recorded_seed = _read_results(output, config_fingerprint(settings))
     if order_seed is None:
         order_seed = recorded_seed if recorded_seed is not None else secrets.randbelow(2**31)
-    logger.info("Level order seed: %d", order_seed)
+    to_run = sum(
+        _run_id(level, scenario.id, repeat) not in done
+        for repeat in range(1, repeats + 1)
+        for scenario in scenarios
+        for level in set(levels)
+    )
+    logger.info(
+        "evaluation: model=%s, levels=%s, scenarios=%s, repeats=%d, order_seed=%d, "
+        "finished=%d, to_run=%d",
+        settings.llm_model,
+        " ".join(dict.fromkeys(levels)),
+        " ".join(scenario.id for scenario in scenarios),
+        repeats,
+        order_seed,
+        len(done),
+        to_run,
+    )
     tracing = tracing_enabled()
     if tracing:
         start_tracing()  # fails before any run starts
@@ -195,17 +213,11 @@ def _execute_runs(
                     lookup=lookup,
                     order_seed=order_seed,
                     block_position=position,
+                    block_size=len(plan),
                 )
                 with output.open("a", encoding="utf-8") as handle:
                     handle.write(record.model_dump_json() + "\n")
                 executed += 1
-                logger.info(
-                    "%s: %s, success=%s, tokens=%d",
-                    record.run_id,
-                    record.status,
-                    record.success,
-                    record.cost.total_tokens,
-                )
     return executed
 
 
@@ -219,11 +231,13 @@ def run_single(
     lookup: Lookup,
     order_seed: int,
     block_position: int,
+    block_size: int,
 ) -> RunRecord:
     """Execute one agent run in a fresh workspace and score its output.
 
     The meter starts once the run's MLflow run is open, and its snapshot is taken when the agent
-    loop ends, so neither tracing set-up nor scoring is part of the run's wall time.
+    loop ends, so neither tracing set-up nor scoring is part of the run's wall time. Every log
+    line written during the run, from its start line to its end line, carries the run ID.
 
     Args:
         level: Tool level key.
@@ -235,6 +249,7 @@ def run_single(
         order_seed: Seed of the level order of the run's block, recorded with the run.
         block_position: 1-based position of the run in its block's planned order over all
             levels of the tool set.
+        block_size: Number of runs in that planned order, for the run's start line.
 
     Returns:
         The record of this run; infrastructure failures yield `status="error"`, agent-caused
@@ -283,7 +298,12 @@ def run_single(
         "checks_version": CHECKS_VERSION,
         "config_sha256": fingerprint,
     }
-    with traced_run(f"{run_settings.llm_model}/{run_id}", params) as trace:
+    with ExitStack() as stack:
+        stack.enter_context(run_context(run_id))
+        logger.info(
+            "start: position %d/%d, seed=%d", block_position, block_size, run_settings.llm_seed
+        )
+        trace = stack.enter_context(traced_run(f"{run_settings.llm_model}/{run_id}", params))
         with (
             use_settings(run_settings),
             trace.agent_span(
@@ -300,14 +320,16 @@ def run_single(
             # Created only now, so wall time covers building the agent and the agent loop and
             # nothing that waits for the tracking server. An unknown level gets no tool names;
             # building its agent fails and records an error.
-            meter = RunMeter(tool_names=[tool.name for tool in TOOLSETS.get(level, ())])
+            tool_names = [tool.name for tool in TOOLSETS.get(level, ())]
+            meter = RunMeter(tool_names=tool_names)
+            steps = StepLogger(tool_names=tool_names)
             try:
                 agent = build_agent(level, settings=run_settings)
                 messages = run_task(
                     agent,
                     task,
                     max_steps=run_settings.agent_max_steps,
-                    callbacks=[meter],
+                    callbacks=[meter, steps],
                     run_name=run_id,
                     tags=[level, scenario.id],
                     metadata={"level": level, "scenario_id": scenario.id, "repeat": repeat},
@@ -370,6 +392,15 @@ def run_single(
             started_at=started_at,
         )
         trace.finish(record, workspace / REVIEW_PATH)
+        logger.info(
+            "end: %s, success=%s, tokens=%d, wall=%.1f s, tool_calls=%d, tool_errors=%d",
+            record.status,
+            record.success,
+            cost.total_tokens,
+            cost.wall_seconds,
+            cost.tool_calls,
+            cost.tool_errors,
+        )
     return record
 
 

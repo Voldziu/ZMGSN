@@ -13,11 +13,14 @@ from tool_eval.evaluation.runner import arxiv_cache_dir, run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
 from tool_eval.exceptions import InvalidInputError, TrackingServerError
 from tool_eval.tools.registry import TOOLSETS
-from tool_eval.utils.logger import get_logger
+from tool_eval.utils.logger import close_logging, configure_logging, get_logger
 
-logger = get_logger(__name__)
+# Not `__name__`: run as `python -m tool_eval.main`, this module is `__main__`, whose logger would
+# sit outside `tool_eval` and drop its INFO lines.
+logger = get_logger("tool_eval.main")
 
 DEFAULT_RESULTS = Path("results/results.jsonl")
+LOG_SUFFIX = ".log"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -32,6 +35,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # LangSmith tracing is configured through LANGSMITH_* variables, which only exist in os.environ.
     load_dotenv()
     args = _parser().parse_args(argv)
+    configure_logging(_log_file(args))
     try:
         if args.command == "run":
             return _run(args)
@@ -39,6 +43,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (InvalidInputError, TrackingServerError) as exc:
         logger.error("%s", exc)  # noqa: TRY400 - user-facing message, no traceback needed
         return 2
+    finally:
+        close_logging()
+
+
+def _log_file(args: argparse.Namespace) -> Path | None:
+    """`run` logs next to its results file; `report` and a rejected output log to the console."""
+    if args.command != "run" or args.output.suffix == LOG_SUFFIX:
+        return None
+    return Path(args.output).with_suffix(LOG_SUFFIX)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -76,6 +89,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _run(args: argparse.Namespace) -> int:
+    if args.output.suffix == LOG_SUFFIX:
+        msg = f"--output must not end in {LOG_SUFFIX}; that name is the evaluation's log file"
+        raise InvalidInputError(msg)
     scenarios = load_scenarios(args.scenarios)
     if args.only:
         unknown = set(args.only) - {s.id for s in scenarios}
@@ -97,7 +113,9 @@ def _run(args: argparse.Namespace) -> int:
         ),
         order_seed=args.order_seed,
     )
-    logger.info("Executed %d runs; results in %s", executed, args.output)
+    logger.info(
+        "Executed %d runs; results in %s, log in %s", executed, args.output, _log_file(args)
+    )
     return 0
 
 

@@ -30,7 +30,7 @@ cp .env.example .env
 4. **Results:**
    - the quality table of the report is printed after each model;
    - all models together: `uv run python -m tool_eval.main report results/presets-*.jsonl --csv results/summary.csv` (see [Report](#report));
-   - records go to `results/presets-<model>.jsonl`;
+   - records go to `results/presets-<model>.jsonl`, and the log to `results/presets-<model>.log` (see [Log](#log));
    - reviews go to `workspace/preset-runs/<model>/`;
    - with tracing on, every run and trace is at `http://localhost:5050`.
 
@@ -88,7 +88,7 @@ make eval-presets                                         # all presets, rag-202
 make eval-presets PRESETS="llama gemma" REPEATS=10 ONLY= LEVELS="level1 level2 level3"   # ONLY= runs all scenarios
 ```
 
-Results go to `results/presets-<preset>.jsonl` and each run's workspace (review, PDFs, extracted texts) to `workspace/preset-runs/<preset>/<run_id>/`; the PDF and arXiv caches are shared in `workspace/`. Running the same command again resumes unfinished runs (delete the results file to start over). Server logs: `logs/server-<preset>.log`.
+Results go to `results/presets-<preset>.jsonl`, its log to `results/presets-<preset>.log`, and each run's workspace (review, PDFs, extracted texts) to `workspace/preset-runs/<preset>/<run_id>/`; the PDF and arXiv caches are shared in `workspace/`. Running the same command again resumes unfinished runs (delete the results file to start over). Server logs: `logs/server-<preset>.log`.
 
 Each run draws a fresh random sampling seed, sends it with every model request of the run (including those made inside tools) and stores it as `seed` in its record. Without it, vLLM samples deterministically from server start, so repeat *n* would come out identical after every restart. The seed is not part of `config_sha256`, so repeats stay comparable.
 
@@ -146,6 +146,27 @@ A run is successful only if it completed (it neither hit the step limit nor fail
 - **Further tables:** repeatability and consistency, per scenario, and the failed and error runs.
 
 `--csv FILE` also writes one row per model and level with every metric, for plots. Interval bounds have their own columns, as do `pass_1` … `pass_10` and one `check_<name>` per check. Undefined values are empty cells.
+
+## Log
+
+`run` writes its log next to its results file, with the suffix `.log`: `--output results/presets-qwen.jsonl` logs to `results/presets-qwen.log`, so `--output` must not end in `.log` itself. A resumed evaluation appends to the same file. Only `run` writes a log file; `report`, the tests and code that imports the package do not.
+
+- **Console:** lines from INFO up: starts, ends and warnings. `TOOL_EVAL_LOG_LEVEL=DEBUG` also shows the agent's steps live.
+- **File:** every line from DEBUG up, including the steps, never rotated. Other libraries' lines appear from WARNING up.
+
+Every line written during a run carries `[<run_id>]`, including warnings from the services that tools call (arXiv, PDF downloads) and from MLflow tracing. The run ID does not name the model, but each log belongs to one results file and therefore to one model. The evaluation and each run report their start and end:
+
+- **Evaluation start:** `evaluation: model=…, levels=…, scenarios=…, repeats=…, order_seed=…, finished=…, to_run=…`, where `finished` counts the runs already in the results file and `to_run` those still to execute.
+- **Run start:** `[<run_id>] start: position p/n, seed=…`, the run's place in its block plan and its sampling seed. It is written before the agent starts, so a run that is stopped or crashes still leaves it.
+- **Run end:** `[<run_id>] end: <status>, success=…, tokens=…, wall=… s, tool_calls=…, tool_errors=…`, the same values as the run's record.
+
+Between them, each step of the agent gets short DEBUG lines, written as soon as the step ends, so a run stopped by the step limit or by hand keeps the steps it took:
+
+- **Model reply:** `[<run_id>] #n model -> k tool calls, … s`, adding malformed calls (unparseable or naming a tool the level does not offer), a finish reason other than a normal stop (such as `finish=length`) and the start of any text.
+- **Tool call:** `[<run_id>] #n read_file(path='reviews/review.md') -> ok, 0.1 s: <result>` or `-> error, 0.4 s: InvalidInputError: <message>`, where `#n` is the reply that requested it. Model calls made inside a tool get no lines of their own; the tool's line counts them, for example `31 model calls in 1150.2 s`.
+- Arguments, results and text are cut to 150 characters and kept on one line. The full messages are in the MLflow trace.
+
+Two warnings point at a run that seems stuck in a loop: `same tool call 3 times in a row: <call>`, when the agent repeats a call with the same arguments, and `5 tool calls in a row failed; the last one: <tool>`. Each is written at most once per run. They only observe: the run goes on until the agent stops or the step limit ends it, and its record does not change.
 
 ## Tracing with MLflow
 

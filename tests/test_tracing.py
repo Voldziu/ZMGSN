@@ -19,6 +19,7 @@ from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.report import load_records
 from tool_eval.exceptions import TrackingServerError
 from tool_eval.main import main
+from tool_eval.utils.logger import close_logging, configure_logging
 
 
 class _FakeSpan:
@@ -290,7 +291,7 @@ def test_metrics_carry_time_prompt_overhead_and_totals(
     from tool_eval.config import get_settings
 
     def run_task(agent: Any, task: str, *, callbacks: list[Any], **kwargs: Any) -> list[Any]:
-        [meter] = callbacks
+        meter = next(c for c in callbacks if isinstance(c, RunMeter))
         call = uuid4()
         meter.on_chat_model_start({}, [[]], run_id=call)
         usage = {"input_tokens": 1200, "output_tokens": 30, "total_tokens": 1230}
@@ -366,3 +367,22 @@ def test_wall_time_excludes_opening_the_mlflow_run(
     monkeypatch.setattr(runner, "run_task", run_task)
     records = load_records(_evaluate(tmp_path))
     assert [r.cost.wall_seconds for r in records] == [5, 5]
+
+
+def test_mlflow_warnings_carry_the_run_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_mlflow: _FakeMlflow
+) -> None:
+    def broken_metrics(metrics: dict[str, float]) -> None:
+        raise ConnectionError("tracking server went away")
+
+    monkeypatch.setattr(fake_mlflow, "log_metrics", broken_metrics)
+    _patch_agent(monkeypatch)
+    log_file = tmp_path / "eval.log"
+    configure_logging(log_file)
+    try:
+        _evaluate(tmp_path)
+    finally:
+        close_logging()
+    text = log_file.read_text(encoding="utf-8")
+    for run_id in ("level1-demo-01", "level3-demo-01"):
+        assert f"[{run_id}] MLflow: could not log the results of {run_id}" in text
