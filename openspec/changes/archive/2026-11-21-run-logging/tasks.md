@@ -53,7 +53,7 @@
 
 - [x] 4.1 Run `make test`, `uv run ruff format --check .` and `openspec validate run-logging --strict`. List the files under `logs/` and `results/` with their modification times before and after `make test`, and verify that the test suite changed none of them.
 - [x] 4.2 Verify that the configuration hash is unchanged: with `LLM_MODEL=qwen-weak`, resume a copy of the 2026-11-19 results file `results/presets-qwen-weak.jsonl` (or another results file written before this change) with `--only rag-2024h1 --levels level2 --repeats 2`. It executes no run and reports no configuration error.
-- [ ] 4.3 On the Mac, with `make mac-serve PRESET=qwen-weak` running, run `LLM_BASE_URL=http://localhost:8000/v1 LLM_MODEL=qwen-weak uv run python -m tool_eval.main run --only rag-2024h1 --levels level3 --repeats 1 --output results/check-run-logging.jsonl --runs-dir workspace/check-runs`. Verify:
+- [x] 4.3 On the Mac, with `make mac-serve PRESET=qwen-weak` running, run `LLM_BASE_URL=http://localhost:8000/v1 LLM_MODEL=qwen-weak uv run python -m tool_eval.main run --only rag-2024h1 --levels level3 --repeats 1 --output results/check-run-logging.jsonl --runs-dir workspace/check-runs`. Verify:
   - `results/check-run-logging.log` holds the evaluation start line, the run's start line, its step lines, a loop warning before the run ends, and the end line;
   - the console shows the loop warning but no step lines.
 
