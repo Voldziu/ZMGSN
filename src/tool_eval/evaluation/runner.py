@@ -10,6 +10,7 @@ from collections.abc import Iterable, Sequence
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TextIO
 
 import openai
 from langchain_core.messages import AIMessage, AnyMessage
@@ -21,6 +22,7 @@ from tool_eval.evaluation.checks import CHECKS_VERSION, Lookup, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.loop_guard import LoopGuard
 from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
+from tool_eval.evaluation.progress import Progress, terminal_stderr
 from tool_eval.evaluation.steps import StepLogger
 from tool_eval.evaluation.tracing import (
     start_tracing,
@@ -114,6 +116,7 @@ def run_evaluation(
     settings: Settings,
     lookup: Lookup,
     order_seed: int | None = None,
+    progress_file: TextIO | None = None,
 ) -> int:
     """Run every (repeat, scenario, level) combination that has no stored result yet.
 
@@ -135,6 +138,8 @@ def run_evaluation(
         lookup: Resolves arXiv ids to metadata for the outcome checks.
         order_seed: Seed of the level order within blocks. Defaults to the seed recorded in
             `output` (so a resumed evaluation keeps its plan), else a new random seed.
+        progress_file: Stream for the progress bars; `None` draws them on stderr when it is a
+            terminal and draws nothing otherwise.
 
     Returns:
         Number of runs executed in this invocation.
@@ -167,18 +172,29 @@ def run_evaluation(
     tracing = tracing_enabled()
     if tracing:
         start_tracing()  # fails before any run starts
+    planned = repeats * len(scenarios) * len(set(levels))
+    progress = Progress(
+        model=settings.llm_model,
+        planned_runs=planned,
+        finished_runs=planned - to_run,
+        repeats=repeats,
+        scenarios=len(scenarios),
+        file=progress_file if progress_file is not None else terminal_stderr(),
+    )
     try:
-        return _execute_runs(
-            scenarios=scenarios,
-            levels=levels,
-            repeats=repeats,
-            output=output,
-            runs_dir=runs_dir,
-            settings=settings,
-            lookup=lookup,
-            done=done,
-            order_seed=order_seed,
-        )
+        with progress:
+            return _execute_runs(
+                scenarios=scenarios,
+                levels=levels,
+                repeats=repeats,
+                output=output,
+                runs_dir=runs_dir,
+                settings=settings,
+                lookup=lookup,
+                done=done,
+                order_seed=order_seed,
+                progress=progress,
+            )
     finally:
         if tracing:
             stop_tracing()
@@ -195,11 +211,14 @@ def _execute_runs(
     lookup: Lookup,
     done: set[str],
     order_seed: int,
+    progress: Progress,
 ) -> int:
     executed = 0
     requested = set(levels)
     for repeat in range(1, repeats + 1):
-        for scenario in scenarios:
+        progress.repeat(repeat)
+        for index, scenario in enumerate(scenarios, start=1):
+            progress.scenario(index, scenario.id)
             # Planned over the whole tool set, so positions do not depend on `levels`.
             plan = block_order(
                 [*TOOLSETS, *levels], seed=order_seed, repeat=repeat, scenario_id=scenario.id
@@ -207,6 +226,7 @@ def _execute_runs(
             for position, level in enumerate(plan, start=1):
                 if level not in requested or _run_id(level, scenario.id, repeat) in done:
                     continue
+                progress.run(level, position, len(plan))
                 record = run_single(
                     level=level,
                     scenario=scenario,
@@ -221,6 +241,7 @@ def _execute_runs(
                 with output.open("a", encoding="utf-8") as handle:
                     handle.write(record.model_dump_json() + "\n")
                 executed += 1
+                progress.run_done()
     return executed
 
 

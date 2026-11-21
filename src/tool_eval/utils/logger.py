@@ -15,6 +15,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
+from tqdm import tqdm
+
 ROOT_LOGGER_NAME = "tool_eval"
 LOG_LEVEL_VARIABLE = "TOOL_EVAL_LOG_LEVEL"
 
@@ -75,7 +77,7 @@ def configure_logging(log_file: Path | None = None) -> None:
         log_file: File the log is appended to; `None` logs to the console only.
     """
     close_logging()
-    console = logging.StreamHandler(sys.stderr)
+    console = logging.StreamHandler(_ConsoleStream())
     console.setLevel(os.environ.get(LOG_LEVEL_VARIABLE, "INFO").upper())
     handlers: list[logging.Handler] = [console]
     if log_file is not None:
@@ -102,3 +104,18 @@ def close_logging() -> None:
         handler.close()
     _installed.clear()
     logging.getLogger(ROOT_LOGGER_NAME).setLevel(logging.NOTSET)
+
+
+class _ConsoleStream:
+    """Stderr for the console handler, written through `tqdm.write`.
+
+    With progress bars open, `tqdm.write` prints the line above them and redraws them; with no
+    bars it writes the text unchanged. Stderr is looked up on every write, so a redirected or
+    captured stderr is honoured.
+    """
+
+    def write(self, text: str) -> None:
+        tqdm.write(text, file=sys.stderr, end="")
+
+    def flush(self) -> None:
+        sys.stderr.flush()

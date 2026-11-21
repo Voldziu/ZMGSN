@@ -168,6 +168,8 @@ Between them, each step of the agent gets short DEBUG lines, written as soon as 
 - **Tool call:** `[<run_id>] #n read_file(path='reviews/review.md') -> ok, 0.1 s: <result>` or `-> error, 0.4 s: InvalidInputError: <message>`, where `#n` is the reply that requested it. Model calls made inside a tool get no lines of their own; the tool's line counts them, for example `31 model calls in 1150.2 s`.
 - Arguments, results and text are cut to 150 characters and kept on one line. The full messages are in the MLflow trace.
 
+On a terminal, `run` also draws four progress bars on stderr: the model's place among the presets (`eval-presets.sh` passes it as `TOOL_EVAL_PRESET_POSITION=<i>/<n>`; `1/1` without it), the model's runs with an ETA (finished runs of a resumed file count as done), the current repeat, and the current scenario with the running level. Log lines are printed above the bars. With stderr redirected (for example `| tee file`), no bars are drawn and the output is unchanged.
+
 Two warnings point at a run that seems stuck in a loop: `same tool call 3 times in a row: <call>`, when the agent repeats a call with the same arguments, and `5 tool calls in a row failed; the last one: <tool>`. Each is written at most once per run. They only observe: the run goes on until the agent stops, the loop guard stops it (at the 8th identical call or the 10th failed call, with a `loop guard stopped the run: …` warning) or the step limit ends it.
 
 ## Tracing with MLflow

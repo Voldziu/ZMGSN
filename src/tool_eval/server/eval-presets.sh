@@ -82,7 +82,10 @@ wait_ready() {
 }
 
 failed=()
+count=$(wc -w <<< "$PRESETS" | tr -d ' ')
+index=0
 for p in $PRESETS; do
+  index=$((index + 1))
   echo "===== $p ($(date +%T))"
   current=$p
   t0=$SECONDS
@@ -96,7 +99,8 @@ for p in $PRESETS; do
 
   out="results/presets-$p.jsonl"
   # shellcheck disable=SC2086  # ONLY and LEVELS are intentionally word-split into arguments
-  LLM_BASE_URL=$API LLM_MODEL=$p \
+  # TOOL_EVAL_PRESET_POSITION feeds the model progress bar (shown only on a terminal).
+  LLM_BASE_URL=$API LLM_MODEL=$p TOOL_EVAL_PRESET_POSITION="$index/$count" \
     PDF_CACHE_DIR="${PDF_CACHE_DIR:-workspace/pdf_cache}" \
     ARXIV_CACHE_DIR="${ARXIV_CACHE_DIR:-workspace/arxiv_cache}" \
     uv run python -m tool_eval.main run \
