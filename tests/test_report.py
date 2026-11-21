@@ -419,3 +419,28 @@ def test_cli_reports_several_files_and_writes_a_csv(
     assert rows[2]["pass_2"] == ""  # a single run per scenario
 
     assert main(["report", str(qwen), str(qwen)]) == 2
+
+
+def test_new_tool_and_reading_measures_are_summarized() -> None:
+    from tool_eval.evaluation.report import summarize
+
+    record = _record("level1", "a", 1, score=1.0, tokens=10)
+    cost = record.cost.model_copy(
+        update={
+            "tool_calls": 10,
+            "tool_errors": 3,
+            "tool_errors_environment": 1,
+            "tool_errors_agent": 2,
+            "text_tool_calls": 1,
+            "chars_read": {"2401.00001": 6000, "2401.00002": 18000},
+            "arxiv_requests": 2,
+            "pdf_downloads": 1,
+        }
+    )
+    old = _record("level1", "b", 1, score=1.0, tokens=10)
+    summary = summarize([record.model_copy(update={"cost": cost}), old])[0]
+    assert summary.environment_error_rate == 0.1
+    assert summary.agent_error_rate == 0.2
+    assert summary.mean_text_tool_calls == 1
+    assert summary.mean_chars_read_per_paper == 12000
+    assert summary.mean_cache_misses == 3

@@ -352,3 +352,41 @@ def test_wall_time_ends_before_scoring(tmp_path: Path, monkeypatch: pytest.Monke
         assert (record.cost.agent_llm_seconds, record.cost.tool_seconds) == (0, 0)
         # The runner gives the meter the level's tool names.
         assert record.cost.malformed_tool_calls == 0
+
+
+@pytest.mark.parametrize(
+    ("text", "counted"),
+    [
+        ('{"name": "write_review", "parameters": {"markdown": "# Graph', True),
+        ('  {"name": "search_arxiv", "arguments": {"query": "x"}}', True),
+        ("<tool_call>\n<function=search_arxiv>", True),
+        ("The review is saved in reviews/review.md.", False),
+        ('Here is JSON: {"name": "x"}', False),
+    ],
+)
+def test_tool_calls_left_in_the_text_are_counted(text: str, counted: bool) -> None:
+    meter = RunMeter()
+    run = uuid4()
+    meter.on_chat_model_start({}, [[]], run_id=run)
+    meter.on_llm_end(_reply(text), run_id=run)
+    assert meter.snapshot().text_tool_calls == int(counted)
+
+
+def test_tool_errors_are_split_by_cause() -> None:
+    from tool_eval.exceptions import InvalidInputError, PaperNotFoundError
+
+    meter = RunMeter()
+    for error in (
+        PaperNotFoundError("arXiv returned HTTP 404"),
+        RuntimeError("wrapped"),
+        InvalidInputError("Invalid arXiv identifier"),
+        ValueError("validation"),
+    ):
+        if str(error) == "wrapped":
+            error.__cause__ = ConnectionError("x")
+        tool_run = uuid4()
+        meter.on_tool_start({}, "", run_id=tool_run)
+        meter.on_tool_error(error, run_id=tool_run)
+    cost = meter.snapshot()
+    assert cost.tool_errors == 4
+    assert (cost.tool_errors_environment, cost.tool_errors_agent) == (1, 3)

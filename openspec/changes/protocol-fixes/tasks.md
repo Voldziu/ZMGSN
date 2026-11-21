@@ -30,10 +30,10 @@
 
 ## 5. Metering and scoring
 
-- [ ] 5.1 Count `text_tool_calls` in `RunMeter` (JSON `name` + `parameters`/`arguments`, `<tool_call>`, `<function=`). Tests: the llama-style truncated call is counted; a plain final answer is not.
-- [ ] 5.2 Split tool errors into `tool_errors_environment` and `tool_errors_agent` by exception type. Tests: a missing PDF counts as environment; a bad id counts as agent; the two sum to `tool_errors`.
-- [ ] 5.3 Retry scoring in `run_single` on `ExternalServiceError` (4 attempts, waits 60/180/600 s, injectable for tests) without re-running the agent. List unscored runs at the end of `run_evaluation`. Tests: outage then success gives one agent run and a real status; a persistent outage gives `error` and is listed.
-- [ ] 5.4 Show the new counts in `report.py` where they belong (tool reliability: text tool calls and environment/agent errors; cost: characters read per paper, cache misses), and add them to the CSV.
+- [x] 5.1 Count `text_tool_calls` in `RunMeter` (JSON `name` + `parameters`/`arguments`, `<tool_call>`, `<function=`). Tests: the llama-style truncated call is counted; a plain final answer is not.
+- [x] 5.2 Split tool errors into `tool_errors_environment` and `tool_errors_agent` by exception type. Tests: a missing PDF counts as environment; a bad id counts as agent; the two sum to `tool_errors`.
+- [x] 5.3 Retry scoring in `run_single` on `ExternalServiceError` (4 attempts, waits 60/180/600 s, injectable for tests) without re-running the agent. List unscored runs at the end of `run_evaluation`. Tests: outage then success gives one agent run and a real status; a persistent outage gives `error` and is listed.
+- [x] 5.4 Show the new counts in `report.py` where they belong (tool reliability: text tool calls and environment/agent errors; cost: characters read per paper, cache misses), and add them to the CSV.
 
 ## 6. Server and launcher
 

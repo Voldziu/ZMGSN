@@ -108,6 +108,12 @@ class CostMetrics(BaseModel):
     # arXiv API requests and PDF downloads of the run that missed the shared caches.
     arxiv_requests: int | None = None
     pdf_downloads: int | None = None
+    # Agent replies whose text holds a tool call the server's parser missed.
+    text_tool_calls: int | None = None
+    # Tool errors caused by external services (network, arXiv HTTP errors, missing PDFs) and
+    # by the agent (every other failed call); they add up to `tool_errors`.
+    tool_errors_environment: int | None = None
+    tool_errors_agent: int | None = None
 
     @property
     def total_tokens(self) -> int:

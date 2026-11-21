@@ -447,6 +447,52 @@ def test_arxiv_failure_during_checks_is_an_error_run(
     assert {r.status for r in load_records(output)} == {"error"}
 
 
+def test_scoring_is_retried_without_rerunning_the_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _no_scoring_waits: list[float]
+) -> None:
+    agent_runs: list[int] = []
+
+    def agent() -> None:
+        agent_runs.append(1)
+        _write_review(get_settings().workspace_dir, _review_text())
+
+    _patch_agent(monkeypatch, agent)
+    working = _lookup(_papers())
+    calls: list[int] = []
+
+    def flaky_lookup(ids: Sequence[str]) -> Mapping[str, Any]:
+        calls.append(1)
+        if len(calls) <= 2:
+            raise ExternalServiceError("arXiv answered 429")
+        return working(ids)
+
+    _, output = _run(tmp_path, lookup=flaky_lookup)
+    records = load_records(output)
+    # Two runs (levels 1 and 3); only the first one's scoring hits the outage.
+    assert [r.status for r in records] == ["completed", "completed"]
+    assert all(r.outcome is not None for r in records)
+    assert len(agent_runs) == 2
+    assert _no_scoring_waits == [60, 180]
+
+
+def test_persistent_scoring_outage_is_an_error_and_reported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    _no_scoring_waits: list[float],
+) -> None:
+    _patch_agent(monkeypatch, lambda: _write_review(get_settings().workspace_dir, _review_text()))
+
+    def broken_lookup(ids: Sequence[str]) -> Mapping[str, Any]:
+        raise ExternalServiceError("arXiv down")
+
+    with caplog.at_level("WARNING"):
+        _, output = _run(tmp_path, lookup=broken_lookup)
+    assert {r.status for r in load_records(output)} == {"error"}
+    assert _no_scoring_waits == [60, 180, 600] * 2
+    assert "2 planned runs have no scored record" in caplog.text
+
+
 LEVELS = ["level1", "level2", "level3"]
 # block_order(LEVELS, seed=7, repeat=1, scenario_id="demo"), fixed when the order was introduced.
 GOLDEN_ORDER = ["level1", "level3", "level2"]

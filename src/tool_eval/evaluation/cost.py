@@ -1,18 +1,26 @@
 """Cost metering through LangChain callbacks, including LLM calls made inside tools."""
 
+import re
 import threading
 import time
 from collections.abc import Callable, Collection, Sequence
 from typing import Any, Literal
 from uuid import UUID
 
+import httpx
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
 from tool_eval.evaluation.models import CostMetrics
+from tool_eval.exceptions import ExternalServiceError
 
 _Side = Literal["agent", "tool"]
+# A tool call the server's parser did not recognise, left in the reply text: a JSON object with
+# a name and its parameters/arguments, a <tool_call> block, or a <function=...> tag.
+_TEXT_TOOL_CALL = re.compile(
+    r'^\s*\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"(?:parameters|arguments)"\s*:|<tool_call>|<function='
+)
 
 
 class RunMeter(BaseCallbackHandler):
@@ -61,6 +69,8 @@ class RunMeter(BaseCallbackHandler):
         }
         self._invalid_tool_calls = 0
         self._unknown_tool_calls = 0
+        self._text_tool_calls = 0
+        self._environment_errors = 0
         self._seconds: dict[str, float] = {
             "agent_llm_seconds": 0.0,
             "tool_llm_seconds": 0.0,
@@ -132,6 +142,8 @@ class RunMeter(BaseCallbackHandler):
         """Count a failed tool call and add its duration."""
         with self._lock:
             self._counts["tool_errors"] += 1
+            if _is_environment_error(error):
+                self._environment_errors += 1
             self._end_tool_call(run_id)
 
     def snapshot(self) -> CostMetrics:
@@ -151,6 +163,9 @@ class RunMeter(BaseCallbackHandler):
                 unknown_tool_calls=(
                     self._unknown_tool_calls if self._tool_names is not None else None
                 ),
+                text_tool_calls=self._text_tool_calls,
+                tool_errors_environment=self._environment_errors,
+                tool_errors_agent=self._counts["tool_errors"] - self._environment_errors,
             )
 
     def _end_llm_call(self, run_id: UUID) -> _Side:
@@ -168,7 +183,23 @@ class RunMeter(BaseCallbackHandler):
     def _count_malformed(self, replies: Sequence[AIMessage]) -> None:
         for reply in replies:
             self._invalid_tool_calls += len(reply.invalid_tool_calls)
+            if (
+                not reply.tool_calls
+                and not reply.invalid_tool_calls
+                and _TEXT_TOOL_CALL.search(reply.text)
+            ):
+                self._text_tool_calls += 1
             if self._tool_names is not None:
                 self._unknown_tool_calls += sum(
                     call["name"] not in self._tool_names for call in reply.tool_calls
                 )
+
+
+def _is_environment_error(error: BaseException) -> bool:
+    """Whether a failed tool call is caused by an external service rather than the agent."""
+    seen: BaseException | None = error
+    while seen is not None:
+        if isinstance(seen, ExternalServiceError | httpx.HTTPError):
+            return True
+        seen = seen.__cause__
+    return False

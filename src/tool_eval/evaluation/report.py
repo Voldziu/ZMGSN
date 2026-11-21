@@ -55,6 +55,11 @@ class LevelSummary(BaseModel):
     tool_error_rate: float | None  # tool errors per tool call
     mean_malformed_tool_calls: float | None
     malformed_rate: float | None  # malformed calls per attempted call (tool calls + malformed)
+    mean_text_tool_calls: float | None  # replies holding a tool call the parser missed
+    environment_error_rate: float | None  # tool errors caused by external services, per call
+    agent_error_rate: float | None  # every other tool error, per call
+    mean_chars_read_per_paper: float | None  # distinct characters of a paper's text read
+    mean_cache_misses: float | None  # arXiv requests + PDF downloads that reached the network
     # Repeatability: spread across repeats of the same scenario, averaged over scenarios.
     repeatability_score_std: float | None
     repeatability_tokens_cv: float | None
@@ -297,19 +302,34 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
             [[s.model, s.level, *(_num(value, 2) for value in s.pass_hat_k)] for s in summaries],
         ),
         "## Tool calls",
-        "Tool error rate = tool errors per tool call. Malformed calls (unparseable arguments, "
-        "unknown tool names) never start a tool; malformed rate = malformed calls per attempted "
-        "call (tool calls + malformed calls).",
+        "Tool error rate = tool errors per tool call, split into environment errors (network, "
+        "arXiv HTTP errors, missing PDFs) and agent errors (everything else). Malformed calls "
+        "(unparseable arguments, unknown tool names) never start a tool; malformed rate = "
+        "malformed calls per attempted call (tool calls + malformed calls). Text calls = replies "
+        "holding a tool call the server's parser missed.",
         format_markdown_table(
-            ["model", "level", "tool calls/run", "tool error rate", "malformed/run", "malformed"],
+            [
+                "model",
+                "level",
+                "tool calls/run",
+                "tool error rate",
+                "environment",
+                "agent",
+                "malformed/run",
+                "malformed",
+                "text calls/run",
+            ],
             [
                 [
                     s.model,
                     s.level,
                     _num(s.mean_tool_calls, 1),
                     _pct(s.tool_error_rate, 1),
+                    _pct(s.environment_error_rate, 1),
+                    _pct(s.agent_error_rate, 1),
                     _num(s.mean_malformed_tool_calls, 2),
                     _pct(s.malformed_rate, 1),
+                    _num(s.mean_text_tool_calls, 2),
                 ]
                 for s in summaries
             ],
@@ -318,7 +338,9 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
         "Means per scored run. Tokens include LLM calls made inside tools; tokens/success = "
         "mean tokens / success rate. Prompt overhead = input tokens of the first agent call. "
         "Times are summed call durations in seconds (parallel calls all count); other tool "
-        "time is tool time outside LLM calls, mostly network.",
+        "time is tool time outside LLM calls, mostly network. Chars/paper = distinct "
+        "characters of a paper's text that reached the agent or a model; cache misses = arXiv "
+        "requests and PDF downloads that reached the network.",
         format_markdown_table(
             [
                 "model",
@@ -334,6 +356,8 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
                 "tool LLM s",
                 "other tool s",
                 "wall s*",
+                "chars/paper",
+                "cache misses",
             ],
             [
                 [
@@ -350,6 +374,8 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
                     _num(s.mean_tool_llm_seconds, 1),
                     _num(s.mean_tool_other_seconds, 1),
                     _num(s.mean_wall_seconds),
+                    _num(s.mean_chars_read_per_paper),
+                    _num(s.mean_cache_misses, 1),
                 ]
                 for s in summaries
             ],
@@ -458,6 +484,9 @@ def _summarize_group(model: str, level: str, items: Sequence[RunRecord]) -> Leve
     ]
     attempted = sum(calls + malformed for calls, malformed in calls_and_malformed)
     mean_total_tokens = _mean(r.cost.total_tokens for r in valid)
+    split = [r.cost for r in valid if r.cost.tool_errors_environment is not None]
+    split_calls = sum(c.tool_calls for c in split)
+    paper_reads = [n for r in valid if r.cost.chars_read for n in r.cost.chars_read.values()]
     return LevelSummary(
         model=model,
         level=level,
@@ -479,6 +508,21 @@ def _summarize_group(model: str, level: str, items: Sequence[RunRecord]) -> Leve
             sum(malformed for _, malformed in calls_and_malformed) / attempted
             if attempted
             else None
+        ),
+        mean_text_tool_calls=_mean(r.cost.text_tool_calls for r in valid),
+        environment_error_rate=(
+            sum(c.tool_errors_environment or 0 for c in split) / split_calls
+            if split_calls
+            else None
+        ),
+        agent_error_rate=(
+            sum(c.tool_errors_agent or 0 for c in split) / split_calls if split_calls else None
+        ),
+        mean_chars_read_per_paper=_mean(paper_reads),
+        mean_cache_misses=_mean(
+            r.cost.arxiv_requests + r.cost.pdf_downloads
+            for r in valid
+            if r.cost.arxiv_requests is not None and r.cost.pdf_downloads is not None
         ),
         repeatability_score_std=_mean(_std(g) for g in scenario_scores),
         repeatability_tokens_cv=_mean(_cv(g) for g in scenario_tokens),

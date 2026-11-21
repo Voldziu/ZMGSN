@@ -6,7 +6,8 @@ import random
 import re
 import secrets
 import shutil
-from collections.abc import Iterable, Sequence
+import time
+from collections.abc import Callable, Iterable, Sequence
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,6 +41,11 @@ from tool_eval.tools.registry import TOOLSET_VERSION, TOOLSETS
 from tool_eval.utils.logger import get_logger, run_context
 
 logger = get_logger(__name__)
+
+# Waits (seconds) between attempts to score a run when arXiv is unavailable; the agent run
+# itself is never repeated.
+SCORING_RETRY_WAITS: tuple[int, ...] = (60, 180, 600)
+_sleep = time.sleep
 
 _CONTEXT_OVERFLOW = re.compile(r"context[ _](?:size|length|window)", re.IGNORECASE)
 
@@ -204,7 +210,7 @@ def run_evaluation(
     )
     try:
         with progress:
-            return _execute_runs(
+            executed = _execute_runs(
                 scenarios=scenarios,
                 levels=levels,
                 repeats=repeats,
@@ -217,6 +223,18 @@ def run_evaluation(
                 progress=progress,
                 server=server,
             )
+        planned_ids = {
+            _run_id(level, scenario.id, repeat)
+            for repeat in range(1, repeats + 1)
+            for scenario in scenarios
+            for level in set(levels)
+        }
+        missing = _unscored(output, planned_ids, config_fingerprint(settings, server))
+        if missing:
+            logger.warning(
+                "%d planned runs have no scored record: %s", len(missing), " ".join(missing)
+            )
+        return executed
     finally:
         if tracing:
             stop_tracing()
@@ -425,12 +443,14 @@ def run_single(
         outcome: OutcomeScore | None = None
         if status != "error":
             try:
-                outcome = evaluate_review(
-                    workspace / REVIEW_PATH,
-                    workspace=workspace,
-                    scenario=scenario,
-                    expected_papers=run_settings.review_paper_count,
-                    lookup=lookup,
+                outcome = _score_with_retries(
+                    lambda: evaluate_review(
+                        workspace / REVIEW_PATH,
+                        workspace=workspace,
+                        scenario=scenario,
+                        expected_papers=run_settings.review_paper_count,
+                        lookup=lookup,
+                    )
                 )
             except ExternalServiceError as exc:
                 status, error = "error", f"{type(exc).__name__}: {exc}"
@@ -482,6 +502,29 @@ def run_single(
             cost.tool_errors,
         )
     return record
+
+
+def _score_with_retries(score: Callable[[], OutcomeScore]) -> OutcomeScore:
+    """Score a finished run, retrying only the scoring when an external service fails.
+
+    Raises:
+        ExternalServiceError: If every attempt failed.
+    """
+    for wait in (*SCORING_RETRY_WAITS, None):
+        try:
+            return score()
+        except ExternalServiceError as exc:
+            if wait is None:
+                raise
+            logger.warning("scoring failed (%s); retrying in %d s", exc, wait)
+            _sleep(wait)
+    raise AssertionError  # unreachable: the last attempt returns or raises
+
+
+def _unscored(output: Path, planned: set[str], fingerprint: str) -> list[str]:
+    """Planned run ids that have no scored record (absent, or only `error` records)."""
+    scored, _ = _read_results(output, fingerprint)
+    return sorted(planned - scored)
 
 
 def _run_id(level: str, scenario_id: str, repeat: int) -> str:
