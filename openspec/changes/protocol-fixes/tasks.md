@@ -39,7 +39,7 @@
 
 - [x] 6.1 In `eval-presets.sh`: write a timestamped server log per invocation, export `TOOL_EVAL_PRESET_FILE`, send one warm-up tool request after the server is ready, and run `prewarm` once before the first preset.
 - [x] 6.2 In `presets/cuda/qwen-mid.yaml`: remove `quantization: fp8` and set `gpu-memory-utilization: 0.75`. Update the budget table in `README.md`.
-- [ ] 6.3 On the RTX, start `qwen-mid` and run `make tool-check PRESET=qwen-mid`. Record the GPU memory used. If 0.75 does not fit, try 0.8, and record the outcome in design.md.
+- [x] 6.3 On the RTX, start `qwen-mid` and run `make tool-check PRESET=qwen-mid`. Record the GPU memory used. If 0.75 does not fit, try 0.8, and record the outcome in design.md.
 
 ## 7. Docs, paper and presentation
 
@@ -61,10 +61,20 @@
 ## 8. Verification
 
 - [x] 8.1 `make test`, ruff and mypy clean.
-- [ ] 8.2 Smoke run on the Mac: qwen-mid, all levels, 3 scenarios, REPEATS=1. Check that:
+- [x] 8.2 Smoke run on the Mac: qwen-mid, all levels, 3 scenarios, REPEATS=1. Check that:
   - records carry the new fields;
   - no level-3 run calls the tool more than once without reason;
   - L2/L3 summaries are a few sentences;
   - the report shows the new columns.
 
   Estimate the final run time from this smoke run.
+
+Notes on 6.3 and 8.2 (2026-11-21, qwen-mid, rag-2024h1 / hallucination-2024 / xai-2022, all levels, 1 repeat):
+- **RTX: qwen-mid in BF16 starts at 0.75.** It was ready after 437 s with 12.2 GB of 16.3 GB GPU memory in use. The warm-up tool request was answered, and the record shows the server as `Qwen/Qwen3.5-4B`, quantisation none, vLLM 0.33.0. The 9 runs took about 10 minutes, and 8 succeeded. One level-1 run failed `titles_match`.
+- **Mac:** 9 of 9 runs succeeded.
+- **Records** carry sampling (0.7 / 0.95 / 20), the server identity, `chars_read`, `text_tool_calls` (all 0), the error split and the cache misses (0 after prewarm, except one arXiv request).
+- **Level 3:** 5 of 6 runs made a single tool call, about 35k tokens each. Before this change the same model averaged 108k tokens at level 3, and qwen 9B repeated the call in 7 of 10 runs. The one repeat (Mac, hallucination) came after the tool reported completion.
+- **Summaries:** level 2/3 sections are about 1,000–1,300 characters, against 3,000–4,000 before the synthesis step.
+- **Characters read per paper:** level 2/3 read 16,965. At level 1 the agent's choice shows: about 3,000 on the RTX (one chunk per paper), and 3,000–17,000 on the Mac.
+- **Level-1 cost:** with one call per turn, level 1 uses 210k–650k tokens per run, against about 70k–90k at level 2.
+- **Time estimate:** on the RTX, qwen-mid takes about 1.1 min per run. 900 runs over five models comes to roughly 15–20 h, depending on the larger models.
