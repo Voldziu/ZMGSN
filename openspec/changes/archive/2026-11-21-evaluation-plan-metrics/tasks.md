@@ -114,10 +114,11 @@
   - drop the unused `z`, `confidence` and `compare_levels(resamples, seed)` parameters;
   - name files, not paths, in the duplicate-run error.
 - [x] 8.6 Update the README: the block plan over the tool set, undefined values, the duplicate-run error. Verify that the README matches the code.
-- [ ] 8.7 Run `make test`, `uv run ruff format --check .` and `openspec validate evaluation-plan-metrics --strict`. Render the report from the local `qwen-weak` and `qwen-mid` run on the Mac (`rag-2024h1`, three levels, two repeats). Check the records for:
+- [x] 8.7 Run `make test`, `uv run ruff format --check .` and `openspec validate evaluation-plan-metrics --strict`. Render the report from the local `qwen-weak` and `qwen-mid` run on the Mac (`rag-2024h1`, three levels, two repeats). Check the records for:
   - model and tool time, and first-call input tokens that differ by level;
   - malformed-call counts;
   - order seeds and positions that match `block_order`.
+  - **Accepted by Mikołaj Machalski on 2026-11-21 without the local `qwen-mid` run:** it never ran. The tests, format check and validation pass; `qwen-weak` ran on the Mac on 2026-11-19 and 2026-11-21.
 
 ## Workflow follow-up
 

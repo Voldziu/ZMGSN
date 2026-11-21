@@ -39,10 +39,12 @@ Evaluation runs SHALL be recorded in MLflow when `MLFLOW_TRACKING_URI` is set, a
 
 ### Requirement: Each evaluation run is an MLflow run
 With tracing enabled, each evaluation run SHALL be logged as one MLflow run in the configured experiment (default `tool-eval`). The MLflow run SHALL carry:
-- **parameters:** model, level, scenario, repeat, seed, step limit, temperature, prompt version, tool-set version, checks version and config hash;
-- **metrics:** score, success, model calls, tool calls, tool errors, tokens and wall time;
+- **parameters:** model, level, scenario, repeat, seed, order seed, position in the block, step limit, temperature, prompt version, tool-set version, checks version and config hash;
+- **metrics:** score, success (under the success rule), model calls, tool calls, tool errors, malformed tool calls, tokens (including the total and the first agent call's input tokens), model and tool time, and wall time;
 - **tags:** status and error;
 - **artifacts:** the review file and the run record.
+
+A measurement that the run's record does not know SHALL NOT be logged.
 
 #### Scenario: Compare models in the UI
 - **WHEN** `qwen` and `llama` were evaluated with tracing enabled
@@ -51,6 +53,14 @@ With tracing enabled, each evaluation run SHALL be logged as one MLflow run in t
 #### Scenario: Review attached
 - **WHEN** a run wrote `reviews/review.md`
 - **THEN** the file is stored as an artifact of the run's MLflow run
+
+#### Scenario: Step-limit run is not a success
+- **WHEN** a run that hit the step limit passed every check
+- **THEN** its `success` metric is 0 and its `score` metric is 1
+
+#### Scenario: Prompt overhead and time
+- **WHEN** a run is logged
+- **THEN** its metrics include the total tokens, the first agent call's input tokens, the agent and tool-internal model time and the tool time
 
 ### Requirement: One trace per run holds every call
 With tracing enabled, each evaluation run SHALL produce exactly one trace, linked to its MLflow run. The trace SHALL contain every agent model call, every tool call, and every model call made inside a tool, nested under the tool that made it. It SHALL record token usage per model call, and it SHALL mark failed tool calls as errors that carry the exception type and message.
