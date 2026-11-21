@@ -32,6 +32,7 @@ from tool_eval.evaluation.models import (
 from tool_eval.evaluation.report import load_records, render_markdown, summarize
 from tool_eval.evaluation.runner import run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
+from tool_eval.evaluation.server_identity import ServerIdentity
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.llm import get_chat_model
 from tool_eval.main import main
@@ -767,7 +768,7 @@ def test_cli_report_prints_and_rejects_missing_file(
 
 def test_every_level_can_search_summarize_and_write() -> None:
     required = {
-        "level1": {"search_arxiv", "summarize_chunk", "append_to_file"},
+        "level1": {"search_arxiv", "summarize_chunk", "write_file"},
         "level2": {"search_papers", "get_and_summarize_paper", "write_review"},
         "level3": {"conduct_literature_review"},
     }
@@ -880,7 +881,32 @@ def test_fingerprint_covers_step_limit_and_parallel_policy(
     assert fingerprint(agent_max_steps=10) != base
     assert fingerprint(agent_max_repeated_calls=0) != base
     assert fingerprint(agent_max_tool_error_streak=3) != base
-    assert fingerprint(llm_parallel_tool_calls=False) != base
+    assert fingerprint(llm_parallel_tool_calls=True) != base
+    assert fingerprint(llm_top_p=0.8) != base
+    assert fingerprint(llm_top_k=40) != base
+    assert fingerprint(llm_max_tokens=4096) != base
+    assert fingerprint(llm_enable_thinking=True) != base
+
+
+def test_fingerprint_covers_the_served_model(tmp_path: Path) -> None:
+    settings = _settings(tmp_path, llm_model="qwen-mid")
+    fp8 = ServerIdentity(checkpoint="Qwen/Qwen3.5-4B", quantization="fp8")
+    bf16 = ServerIdentity(checkpoint="Qwen/Qwen3.5-4B", quantization="none")
+    assert runner.config_fingerprint(settings, fp8) != runner.config_fingerprint(settings, bf16)
+    assert runner.config_fingerprint(settings) != runner.config_fingerprint(settings, bf16)
+
+
+def test_records_without_sampling_or_server_still_load() -> None:
+    record = _record("level1", "a", 1, score=1.0, tokens=10)
+    data = json.loads(record.model_dump_json())
+    old = {
+        k: v
+        for k, v in data.items()
+        if k not in {"top_p", "top_k", "llm_max_tokens", "enable_thinking", "server"}
+    }
+    loaded = RunRecord.model_validate(old)
+    assert loaded.top_p is None
+    assert loaded.server is None
 
 
 def test_records_carry_the_loop_guard_limits() -> None:

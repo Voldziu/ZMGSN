@@ -155,7 +155,8 @@ class RunTrace:
         outcome = record.outcome
         cost = record.cost
         measured = {
-            **cost.model_dump(),
+            **cost.model_dump(exclude={"chars_read"}),
+            "chars_read_total": sum(cost.chars_read.values()) if cost.chars_read else None,
             "total_tokens": cost.total_tokens,
             "llm_calls": cost.llm_calls,
             "malformed_tool_calls": cost.malformed_tool_calls,

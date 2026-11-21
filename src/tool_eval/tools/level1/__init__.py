@@ -7,7 +7,7 @@ from tool_eval.tools.level1.documents import (
     extract_text_from_pdf,
     split_text_into_chunks,
 )
-from tool_eval.tools.level1.files import append_to_file, read_file
+from tool_eval.tools.level1.files import read_file, write_file
 from tool_eval.tools.level1.formatting import create_markdown_table, format_apa_citation
 from tool_eval.tools.level1.language import extract_keywords, summarize_chunk, translate_text
 from tool_eval.tools.level1.search import search_arxiv, search_wikipedia
@@ -23,6 +23,6 @@ TOOLS: list[BaseTool] = [
     translate_text,
     format_apa_citation,
     create_markdown_table,
-    append_to_file,
+    write_file,
     read_file,
 ]

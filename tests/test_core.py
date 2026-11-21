@@ -115,8 +115,8 @@ def test_v2_task_requires_reading_full_text() -> None:
     assert "full text" in load_prompt("system", "v2").text
 
 
-def test_prompt_version_defaults_to_v2(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prompt_version_defaults_to_v3(monkeypatch: pytest.MonkeyPatch) -> None:
     from tool_eval.config import Settings
 
     monkeypatch.delenv("PROMPT_VERSION", raising=False)
-    assert Settings(_env_file=None).prompt_version == "v2"
+    assert Settings(_env_file=None).prompt_version == "v3"

@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict
 from tool_eval.config import get_settings
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.services.http import build_client
+from tool_eval.services.network import count_network_request
 from tool_eval.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -47,6 +48,8 @@ class ArxivPaper(BaseModel):
     authors: list[str]
     published: date
     abstract: str
+    # Latest version number from the entry id (`…v3`); unknown for entries without one.
+    version: int | None = None
 
 
 def validate_arxiv_id(arxiv_id: str) -> str:
@@ -153,6 +156,7 @@ def _request(params: dict[str, str], *, timeout: float, cache_dir: Path | None) 
     cache_file = directory / f"{_cache_key(params)}.xml" if directory is not None else None
     if cache_file is not None and cache_file.is_file():
         return _parse_feed(cache_file.read_text(encoding="utf-8"))
+    count_network_request("arxiv_requests")
     xml_text = _fetch_with_retries(params, timeout=timeout)
     papers = _parse_feed(xml_text)  # raises on error entries, so failures are never cached
     if cache_file is not None:
@@ -230,8 +234,11 @@ def _parse_entry(entry: Element) -> ArxivPaper:
     if "/abs/" not in raw_id:
         msg = f"arXiv returned an error entry: {_text(entry, 'summary')[:120]}"
         raise ExternalServiceError(msg)
-    arxiv_id = _VERSION_SUFFIX.sub("", raw_id.split("/abs/", 1)[1])
+    versioned = raw_id.split("/abs/", 1)[1]
+    arxiv_id = _VERSION_SUFFIX.sub("", versioned)
+    suffix = _VERSION_SUFFIX.search(versioned)
     return ArxivPaper(
+        version=int(suffix.group()[1:]) if suffix else None,
         arxiv_id=arxiv_id,
         title=_text(entry, "title"),
         authors=[_text(author, "name") for author in entry.findall(f"{_ATOM}author")],

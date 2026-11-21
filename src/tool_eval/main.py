@@ -1,4 +1,8 @@
-"""Command-line entry point: `run` executes the evaluation, `report` summarizes its results."""
+"""Command-line entry point.
+
+`run` executes the evaluation, `prewarm` fills the arXiv and PDF caches beforehand, and `report`
+summarizes results.
+"""
 
 import argparse
 from collections.abc import Sequence
@@ -8,10 +12,12 @@ from dotenv import load_dotenv
 
 from tool_eval.config import get_settings
 from tool_eval.evaluation.checks import ArxivLookup
+from tool_eval.evaluation.models import Scenario
 from tool_eval.evaluation.report import load_results, render_markdown, summarize, write_csv
 from tool_eval.evaluation.runner import arxiv_cache_dir, run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
 from tool_eval.exceptions import InvalidInputError, TrackingServerError
+from tool_eval.services.prewarm import prewarm
 from tool_eval.tools.registry import TOOLSETS
 from tool_eval.utils.logger import close_logging, configure_logging, get_logger
 
@@ -39,6 +45,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "run":
             return _run(args)
+        if args.command == "prewarm":
+            return _prewarm(args)
         return _report(args)
     except (InvalidInputError, TrackingServerError) as exc:
         logger.error("%s", exc)  # noqa: TRY400 - user-facing message, no traceback needed
@@ -73,6 +81,16 @@ def _parser() -> argparse.ArgumentParser:
         "(default: the seed recorded in --output, else random)",
     )
 
+    warm = commands.add_parser("prewarm", help="fill the arXiv and PDF caches for scenarios")
+    warm.add_argument("--scenarios", type=Path, default=Path("scenarios/scenarios.json"))
+    warm.add_argument("--only", nargs="+", metavar="ID", help="restrict to these scenario ids")
+    warm.add_argument(
+        "--runs-dir",
+        type=Path,
+        default=Path("workspace/runs"),
+        help="runs directory of the evaluation; locates the default caches",
+    )
+
     report = commands.add_parser("report", help="summarize one or more results files")
     report.add_argument(
         "inputs",
@@ -92,13 +110,7 @@ def _run(args: argparse.Namespace) -> int:
     if args.output.suffix == LOG_SUFFIX:
         msg = f"--output must not end in {LOG_SUFFIX}; that name is the evaluation's log file"
         raise InvalidInputError(msg)
-    scenarios = load_scenarios(args.scenarios)
-    if args.only:
-        unknown = set(args.only) - {s.id for s in scenarios}
-        if unknown:
-            msg = f"Unknown scenario ids: {', '.join(sorted(unknown))}"
-            raise InvalidInputError(msg)
-        scenarios = [s for s in scenarios if s.id in args.only]
+    scenarios = _select(args)
     settings = get_settings().model_copy(update={"agent_temperature": args.temperature})
     executed = run_evaluation(
         scenarios=scenarios,
@@ -115,6 +127,39 @@ def _run(args: argparse.Namespace) -> int:
     )
     logger.info(
         "Executed %d runs; results in %s, log in %s", executed, args.output, _log_file(args)
+    )
+    return 0
+
+
+def _select(args: argparse.Namespace) -> list[Scenario]:
+    scenarios = load_scenarios(args.scenarios)
+    if args.only:
+        unknown = set(args.only) - {s.id for s in scenarios}
+        if unknown:
+            msg = f"Unknown scenario ids: {', '.join(sorted(unknown))}"
+            raise InvalidInputError(msg)
+        scenarios = [s for s in scenarios if s.id in args.only]
+    return scenarios
+
+
+def _prewarm(args: argparse.Namespace) -> int:
+    base = get_settings()
+    settings = base.model_copy(
+        update={
+            "pdf_cache_dir": base.pdf_cache_dir or args.runs_dir.parent / "pdf_cache",
+            "arxiv_cache_dir": arxiv_cache_dir(base, args.runs_dir),
+        }
+    )
+    result = prewarm(_select(args), settings=settings)
+    logger.info(
+        "prewarm: %d topics, %d candidates, %d arXiv requests and %d PDF downloads sent; "
+        "missing PDFs: %s; failed: %s",
+        result.scenarios,
+        result.candidates,
+        result.arxiv_requests,
+        result.pdf_downloads,
+        " ".join(result.missing_pdfs) or "none",
+        " ".join(result.failed) or "none",
     )
     return 0
 

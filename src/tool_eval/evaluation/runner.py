@@ -23,6 +23,7 @@ from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.loop_guard import LoopGuard
 from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
 from tool_eval.evaluation.progress import Progress, terminal_stderr
+from tool_eval.evaluation.server_identity import ServerIdentity, read_server_identity
 from tool_eval.evaluation.steps import StepLogger
 from tool_eval.evaluation.tracing import (
     start_tracing,
@@ -32,6 +33,8 @@ from tool_eval.evaluation.tracing import (
 )
 from tool_eval.exceptions import AgentLoopError, ExternalServiceError, InvalidInputError
 from tool_eval.prompts import load_prompt
+from tool_eval.services.network import network_meter
+from tool_eval.services.reading import reading_meter
 from tool_eval.services.reports import REVIEW_PATH
 from tool_eval.tools.registry import TOOLSET_VERSION, TOOLSETS
 from tool_eval.utils.logger import get_logger, run_context
@@ -41,11 +44,12 @@ logger = get_logger(__name__)
 _CONTEXT_OVERFLOW = re.compile(r"context[ _](?:size|length|window)", re.IGNORECASE)
 
 
-def config_fingerprint(settings: Settings) -> str:
+def config_fingerprint(settings: Settings, server: ServerIdentity | None = None) -> str:
     """Hash every setting that changes run results, so incomparable runs can be told apart.
 
     Args:
         settings: Settings of the run.
+        server: Identity of the served model; `None` hashes an all-unknown identity.
 
     Returns:
         Hex SHA-256 digest.
@@ -53,6 +57,11 @@ def config_fingerprint(settings: Settings) -> str:
     payload = {
         "model": settings.llm_model,
         "temperature": settings.agent_temperature,
+        "top_p": settings.llm_top_p,
+        "top_k": settings.llm_top_k,
+        "llm_max_tokens": settings.llm_max_tokens,
+        "enable_thinking": settings.llm_enable_thinking,
+        "server": (server or ServerIdentity()).model_dump(),
         "max_steps": settings.agent_max_steps,
         "max_repeated_calls": settings.agent_max_repeated_calls,
         "max_tool_error_streak": settings.agent_max_tool_error_streak,
@@ -117,6 +126,7 @@ def run_evaluation(
     lookup: Lookup,
     order_seed: int | None = None,
     progress_file: TextIO | None = None,
+    server: ServerIdentity | None = None,
 ) -> int:
     """Run every (repeat, scenario, level) combination that has no stored result yet.
 
@@ -140,6 +150,8 @@ def run_evaluation(
             `output` (so a resumed evaluation keeps its plan), else a new random seed.
         progress_file: Stream for the progress bars; `None` draws them on stderr when it is a
             terminal and draws nothing otherwise.
+        server: Identity of the served model; read from the server and the preset file when
+            `None`.
 
     Returns:
         Number of runs executed in this invocation.
@@ -149,7 +161,9 @@ def run_evaluation(
         TrackingServerError: If MLflow tracing is on but its server is not healthy.
     """
     output.parent.mkdir(parents=True, exist_ok=True)
-    done, recorded_seed = _read_results(output, config_fingerprint(settings))
+    if server is None:
+        server = read_server_identity(settings.llm_base_url, served_name=settings.llm_model)
+    done, recorded_seed = _read_results(output, config_fingerprint(settings, server))
     if order_seed is None:
         order_seed = recorded_seed if recorded_seed is not None else secrets.randbelow(2**31)
     to_run = sum(
@@ -157,6 +171,13 @@ def run_evaluation(
         for repeat in range(1, repeats + 1)
         for scenario in scenarios
         for level in set(levels)
+    )
+    logger.info(
+        "server: checkpoint=%s, vllm=%s, quantization=%s, parser=%s",
+        server.checkpoint,
+        server.vllm_version,
+        server.quantization,
+        server.tool_parser,
     )
     logger.info(
         "evaluation: model=%s, levels=%s, scenarios=%s, repeats=%d, order_seed=%d, "
@@ -194,6 +215,7 @@ def run_evaluation(
                 done=done,
                 order_seed=order_seed,
                 progress=progress,
+                server=server,
             )
     finally:
         if tracing:
@@ -212,6 +234,7 @@ def _execute_runs(
     done: set[str],
     order_seed: int,
     progress: Progress,
+    server: ServerIdentity,
 ) -> int:
     executed = 0
     requested = set(levels)
@@ -237,6 +260,7 @@ def _execute_runs(
                     order_seed=order_seed,
                     block_position=position,
                     block_size=len(plan),
+                    server=server,
                 )
                 with output.open("a", encoding="utf-8") as handle:
                     handle.write(record.model_dump_json() + "\n")
@@ -256,6 +280,7 @@ def run_single(
     order_seed: int,
     block_position: int,
     block_size: int,
+    server: ServerIdentity | None = None,
 ) -> RunRecord:
     """Execute one agent run in a fresh workspace and score its output.
 
@@ -274,6 +299,7 @@ def run_single(
         block_position: 1-based position of the run in its block's planned order over all
             levels of the tool set.
         block_size: Number of runs in that planned order, for the run's start line.
+        server: Identity of the served model, hashed and recorded with the run.
 
     Returns:
         The record of this run; infrastructure failures yield `status="error"`, agent-caused
@@ -304,7 +330,8 @@ def run_single(
     started_at = datetime.now(UTC)
     status: RunStatus = "completed"
     error: str | None = None
-    fingerprint = config_fingerprint(run_settings)
+    server = server or ServerIdentity()
+    fingerprint = config_fingerprint(run_settings, server)
     params = {
         "model": run_settings.llm_model,
         "level": level,
@@ -318,6 +345,14 @@ def run_single(
         "max_tool_error_streak": run_settings.agent_max_tool_error_streak,
         "llm_max_tokens": run_settings.llm_max_tokens,
         "temperature": run_settings.agent_temperature,
+        "top_p": run_settings.llm_top_p,
+        "top_k": run_settings.llm_top_k,
+        "enable_thinking": run_settings.llm_enable_thinking,
+        "server_checkpoint": server.checkpoint,
+        "server_quantization": server.quantization,
+        "server_tool_parser": server.tool_parser,
+        "server_chat_template_sha256": server.chat_template_sha256,
+        "server_vllm_version": server.vllm_version,
         "parallel_tool_calls": run_settings.effective_parallel_tool_calls,
         "prompt_version": run_settings.prompt_version,
         "toolset_version": TOOLSET_VERSION,
@@ -332,6 +367,8 @@ def run_single(
         trace = stack.enter_context(traced_run(f"{run_settings.llm_model}/{run_id}", params))
         with (
             use_settings(run_settings),
+            reading_meter() as reads,
+            network_meter() as network,
             trace.agent_span(
                 run_id,
                 tags={
@@ -381,7 +418,8 @@ def run_single(
                 logger.exception("Run %s failed", run_id)
                 status = "failed" if _is_context_overflow(exc) else "error"
                 error = f"{type(exc).__name__}: {exc}"
-            cost = meter.snapshot()  # before scoring: wall time covers the agent run only
+            # Before scoring: wall time covers the agent run only.
+            cost = meter.snapshot().model_copy(update={"chars_read": reads.chars_read(), **network})
             trace.set_status(status, error)
 
         outcome: OutcomeScore | None = None
@@ -408,6 +446,11 @@ def run_single(
             cost=cost,
             model=run_settings.llm_model,
             temperature=run_settings.agent_temperature,
+            top_p=run_settings.llm_top_p,
+            top_k=run_settings.llm_top_k,
+            llm_max_tokens=run_settings.llm_max_tokens,
+            enable_thinking=run_settings.llm_enable_thinking,
+            server=server,
             max_steps=run_settings.agent_max_steps,
             max_repeated_calls=run_settings.agent_max_repeated_calls,
             max_tool_error_streak=run_settings.agent_max_tool_error_streak,

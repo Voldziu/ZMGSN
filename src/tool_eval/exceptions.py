@@ -13,6 +13,10 @@ class ExternalServiceError(ToolEvalError):
     """A remote service (arXiv, Wikipedia, ...) failed or returned unusable data."""
 
 
+class PaperNotFoundError(ExternalServiceError):
+    """arXiv has no PDF for the paper (HTTP 404, also at its latest version)."""
+
+
 class InvalidInputError(ToolEvalError):
     """The caller supplied input that cannot be processed."""
 

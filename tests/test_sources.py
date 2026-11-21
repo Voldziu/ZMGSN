@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -5,8 +6,9 @@ import httpx
 import pytest
 
 from tool_eval.config import Settings
-from tool_eval.exceptions import ExternalServiceError
+from tool_eval.exceptions import ExternalServiceError, PaperNotFoundError
 from tool_eval.services import arxiv, papers, pdf
+from tool_eval.services.network import network_meter
 
 
 class _Page:
@@ -209,12 +211,86 @@ def test_missing_pdf_names_paper_and_status(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _serve_pdf(monkeypatch, httpx.Response(404, text="not found"))
+    monkeypatch.setattr(papers, "fetch_arxiv_papers", lambda ids, **_: [])
     with pytest.raises(ExternalServiceError) as caught:
         papers.download_paper_pdf(
             "2301.00016", settings=Settings(_env_file=None, workspace_dir=tmp_path)
         )
     assert "2301.00016" in str(caught.value)
     assert "HTTP 404" in str(caught.value)
+
+
+def _paper(version: int | None) -> arxiv.ArxivPaper:
+    return arxiv.ArxivPaper(
+        arxiv_id="2209.14086",
+        title="T",
+        authors=["A B"],
+        published=date(2022, 9, 1),
+        abstract="",
+        version=version,
+    )
+
+
+def _serve_by_url(monkeypatch: pytest.MonkeyPatch, pages: dict[str, httpx.Response]) -> list[str]:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return pages.get(str(request.url), httpx.Response(404, text="not found"))
+
+    monkeypatch.setattr(
+        pdf, "build_client", lambda *, timeout: httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    return seen
+
+
+def test_missing_unversioned_pdf_is_tried_at_its_latest_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _serve_by_url(
+        monkeypatch,
+        {"https://arxiv.org/pdf/2209.14086v2": httpx.Response(200, content=b"%PDF-1.4 x")},
+    )
+    monkeypatch.setattr(papers, "fetch_arxiv_papers", lambda ids, **_: [_paper(2)])
+    settings = Settings(_env_file=None, workspace_dir=tmp_path / "w", pdf_cache_dir=tmp_path / "c")
+    with network_meter() as counts:
+        ref = papers.download_paper_pdf("2209.14086", settings=settings)
+    assert (tmp_path / "w" / ref).read_bytes().startswith(b"%PDF")
+    assert seen == ["https://arxiv.org/pdf/2209.14086", "https://arxiv.org/pdf/2209.14086v2"]
+    assert counts["pdf_downloads"] == 2
+
+
+def test_missing_pdf_is_cached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _serve_by_url(monkeypatch, {})
+    monkeypatch.setattr(papers, "fetch_arxiv_papers", lambda ids, **_: [_paper(1)])
+    settings = Settings(_env_file=None, workspace_dir=tmp_path / "w", pdf_cache_dir=tmp_path / "c")
+    for _ in range(2):
+        with pytest.raises(PaperNotFoundError, match="HTTP 404"):
+            papers.download_paper_pdf("2209.14086", settings=settings)
+    assert len(seen) == 2  # the second call is answered from the cache
+    assert (tmp_path / "c" / "2209.14086.missing").is_file()
+
+
+def test_other_pdf_failures_are_not_cached(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _serve_pdf(monkeypatch, httpx.Response(503, text="busy"))
+    settings = Settings(_env_file=None, workspace_dir=tmp_path / "w", pdf_cache_dir=tmp_path / "c")
+    with pytest.raises(ExternalServiceError):
+        papers.download_paper_pdf("2209.14086", settings=settings)
+    assert not list((tmp_path / "c").glob("*.missing"))
+
+
+def test_cached_pdf_needs_no_download(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cache = tmp_path / "c"
+    cache.mkdir()
+    (cache / "2209.14086.pdf").write_bytes(b"%PDF-1.4 cached")
+    settings = Settings(_env_file=None, workspace_dir=tmp_path / "w", pdf_cache_dir=cache)
+    with network_meter() as counts:
+        papers.download_paper_pdf("2209.14086", settings=settings)
+    assert counts["pdf_downloads"] == 0
+
+
+def test_entry_version_is_parsed() -> None:
+    assert arxiv._parse_feed(FEED)[0].version is not None
 
 
 # --- search order ---------------------------------------------------------------------------

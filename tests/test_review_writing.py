@@ -136,3 +136,96 @@ def test_level3_reports_a_shortfall(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert result.papers_included == 3
     assert result.papers_requested == 5
     assert len(result.papers_skipped) == 3
+    assert result.complete is False
+    assert "Only 3 of 5 papers" in result.message
+    assert "incomplete" in result.message
+
+
+def test_level3_states_that_the_task_is_complete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result, _ = _level3(tmp_path, monkeypatch, found=10, unreadable=set())
+    assert result.complete is True
+    assert result.message == (
+        "Review with 5 papers read in full saved to reviews/review.md. The task is complete."
+    )
+
+
+def test_a_repeated_level3_call_starts_clean(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stale = tmp_path / "texts" / "1999.99999.txt"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("from an earlier call", encoding="utf-8")
+    _level3(tmp_path, monkeypatch, found=10, unreadable=set())
+    assert not stale.exists()
+
+
+# --- level 1 writing and tool descriptions ---------------------------------------------------
+
+
+def test_level1_writes_by_replacing_and_keeps_its_distractors(tmp_path: Path) -> None:
+    from tool_eval.config import use_settings
+    from tool_eval.tools.level1.files import write_file
+
+    names = {t.name for t in get_tools("level1")}
+    assert "write_file" in names
+    assert not {n for n in names if "append" in n}
+    assert {"search_wikipedia", "extract_keywords", "translate_text"} <= names
+    assert "create_markdown_table" in names
+    with use_settings(Settings(_env_file=None, workspace_dir=tmp_path)):
+        write_file.invoke({"path": "reviews/review.md", "content": "first draft"})
+        write_file.invoke({"path": "reviews/review.md", "content": "corrected"})
+    assert (tmp_path / "reviews" / "review.md").read_text(encoding="utf-8") == "corrected"
+
+
+def test_no_tool_description_shows_a_real_looking_arxiv_id() -> None:
+    import re
+
+    for level in ("level1", "level2", "level3"):
+        for tool in get_tools(level):
+            schema = str(tool.args)
+            assert not re.search(r"\d{4}\.\d{4,5}", tool.description + schema), tool.name
+
+
+def test_task_prompt_names_no_tool_step_but_requires_full_text() -> None:
+    from tool_eval.prompts import load_prompt
+
+    text = load_prompt("evaluation", "v3").render(
+        topic="t", n_papers="5", date_from="2024-01-01", date_to="2024-06-30"
+    )
+    for word in ("download", "extract", "split", "summarize"):
+        assert word not in text.lower()
+    assert "full text" in text
+
+
+def test_level2_and_level3_summaries_are_synthesized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from langchain_core.language_models import FakeListChatModel
+
+    from tool_eval.services import papers
+
+    text = " ".join(f"w{i:05d}" for i in range(3000))
+    monkeypatch.setattr(papers, "download_paper_pdf", lambda arxiv_id, **_: "papers/x.pdf")
+    monkeypatch.setattr(
+        papers,
+        "extract_paper_text",
+        lambda ref, **_: _write(tmp_path, "texts/2401.00001.txt", text),
+    )
+    llm = FakeListChatModel(responses=[f"part {i}" for i in range(6)] + ["one short synthesis"])
+    result = papers.summarize_paper(
+        "2401.00001",
+        settings=Settings(_env_file=None, workspace_dir=tmp_path, prompt_version="v3"),
+        llm=llm,
+    )
+    assert result.summary == "one short synthesis"
+    assert result.chunks_summarized == 6
+    assert (tmp_path / result.summary_path).read_text(encoding="utf-8") == "one short synthesis"
+
+
+def _write(root: Path, ref: str, text: str) -> str:
+    path = root / ref
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return ref

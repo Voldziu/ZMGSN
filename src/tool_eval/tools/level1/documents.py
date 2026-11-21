@@ -13,7 +13,7 @@ def download_pdf(arxiv_id: str) -> str:
     """Download the PDF of an arXiv paper into the workspace.
 
     Args:
-        arxiv_id: arXiv identifier, for example 2401.00001.
+        arxiv_id: arXiv identifier returned by a search, in the form <arxiv_id>.
 
     Returns:
         Workspace-relative path of the downloaded PDF.

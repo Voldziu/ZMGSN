@@ -9,10 +9,10 @@ from tool_eval.services import papers
 
 @tool(parse_docstring=True)
 def get_and_summarize_paper(arxiv_id: str) -> str:
-    """Download an arXiv paper and summarize it in one step.
+    """Download an arXiv paper, read its leading chunks and summarize it in a few sentences.
 
     Args:
-        arxiv_id: arXiv identifier, for example 2401.00001.
+        arxiv_id: arXiv identifier returned by a search, in the form <arxiv_id>.
 
     Returns:
         JSON with the summary text and the workspace path where it was saved.

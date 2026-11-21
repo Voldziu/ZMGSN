@@ -21,7 +21,7 @@ endif
 
 .DEFAULT_GOAL := help
 .PHONY: help mac-install mac-serve docker-up docker-status docker-logs docker-down \
-	models tool-check eval-smoke eval-presets mlflow-up mlflow-down mlflow-logs test
+	models tool-check eval-smoke prewarm eval-presets mlflow-up mlflow-down mlflow-logs test
 
 help: ## Show this cheat sheet
 	@echo "Usage: make <target> PRESET=<name>   presets: $(ALL_PRESETS)   (default: $(PRESET))"
@@ -78,6 +78,10 @@ eval-smoke: ## 5. One evaluation run against the server (writes results/smoke-<p
 		--output results/smoke-$(PRESET).jsonl --runs-dir workspace/smoke-runs
 
 ##@ Evaluate several presets (any platform, no server running)
+prewarm: ## Fill the arXiv and PDF caches for the scenarios (ONLY; empty = all) before evaluating
+	PDF_CACHE_DIR=workspace/pdf_cache ARXIV_CACHE_DIR=workspace/arxiv_cache \
+		uv run python -m tool_eval.main prewarm $(if $(ONLY),--only $(ONLY))
+
 eval-presets: ## Start each preset, run the evaluation, stop it (PRESETS, REPEATS, ONLY, LEVELS)
 	@PRESETS="$(PRESETS)" REPEATS="$(REPEATS)" ONLY="$(ONLY)" LEVELS="$(LEVELS)" VLLM="$(VLLM)" \
 		bash src/tool_eval/server/eval-presets.sh

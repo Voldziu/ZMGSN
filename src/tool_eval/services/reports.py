@@ -1,6 +1,7 @@
 """Report generation: bibliographies and end-to-end literature reviews."""
 
 import re
+import shutil
 from collections.abc import Sequence
 from datetime import date
 
@@ -20,8 +21,10 @@ logger = get_logger(__name__)
 
 # Fixed so every tool level and the evaluation checks agree on where the review lives.
 REVIEW_PATH = "reviews/review.md"
+# Run-workspace folders the level-3 tool fills; cleared at the start of every call.
+_PAPER_FOLDERS = ("papers", "texts", "chunks", "summaries")
 # Level 3 searches this many candidates per requested paper.
-_CANDIDATE_FACTOR = 2
+CANDIDATE_FACTOR = 2
 _BIBLIOGRAPHY_HEADING = re.compile(r"^##[ \t]+Bibliography[ \t]*$", re.MULTILINE | re.IGNORECASE)
 
 
@@ -39,6 +42,8 @@ class ReviewResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    message: str
+    complete: bool
     review_path: str
     papers_requested: int
     papers_included: int
@@ -163,10 +168,15 @@ def conduct_review(query: str, *, settings: Settings, llm: BaseChatModel) -> Rev
         InvalidInputError: If no papers match the query in the configured date window.
         ExternalServiceError: If none of the found papers could be summarized.
     """
+    # A repeated call starts clean, so the workspace holds only the papers of the last call.
+    for folder in _PAPER_FOLDERS:
+        shutil.rmtree(
+            resolve_in_workspace(folder, workspace=settings.workspace_dir), ignore_errors=True
+        )
     # Spare candidates replace papers that cannot be read (oversized or missing PDFs).
     papers = search_arxiv(
         query,
-        max_results=_CANDIDATE_FACTOR * settings.review_paper_count,
+        max_results=CANDIDATE_FACTOR * settings.review_paper_count,
         date_from=settings.arxiv_date_from,
         date_to=settings.arxiv_date_to,
         timeout=settings.http_timeout_seconds,
@@ -203,8 +213,19 @@ def conduct_review(query: str, *, settings: Settings, llm: BaseChatModel) -> Rev
     )
     dest = resolve_in_workspace(REVIEW_PATH, workspace=settings.workspace_dir)
     write_text(dest, content, max_bytes=settings.max_file_bytes)
+    path = to_ref(dest, workspace=settings.workspace_dir)
+    requested, included = settings.review_paper_count, len(sections)
+    complete = included == requested
+    message = (
+        f"Review with {included} papers read in full saved to {path}. The task is complete."
+        if complete
+        else f"Only {included} of {requested} papers could be read; the review saved to {path} "
+        "is incomplete."
+    )
     return ReviewResult(
-        review_path=to_ref(dest, workspace=settings.workspace_dir),
+        message=message,
+        complete=complete,
+        review_path=path,
         papers_requested=settings.review_paper_count,
         papers_included=len(sections),
         papers_skipped=skipped,

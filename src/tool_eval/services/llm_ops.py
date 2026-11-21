@@ -72,6 +72,21 @@ def translate(
     return _complete(llm, system, truncate(text, max_chars=max_chars))
 
 
+def synthesize(parts: list[str], *, llm: BaseChatModel, prompt: Prompt) -> str:
+    """Combine the summaries of consecutive passages of one paper into one summary.
+
+    Args:
+        parts: Passage summaries in document order.
+        llm: Chat model.
+        prompt: Prompt without placeholders.
+
+    Returns:
+        The combined summary.
+    """
+    numbered = "\n\n".join(f"Passage {n}: {part}" for n, part in enumerate(parts, start=1))
+    return _complete(llm, prompt.text, numbered)
+
+
 def _complete(llm: BaseChatModel, system: str, text: str) -> str:
     response = llm.invoke([SystemMessage(system), HumanMessage(text)])
     return response.text.strip()

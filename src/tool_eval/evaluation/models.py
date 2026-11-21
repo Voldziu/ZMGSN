@@ -5,6 +5,8 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
+from tool_eval.evaluation.server_identity import ServerIdentity
+
 # `failed`: agent broke the run (e.g. context overflow), scored; `error`: infrastructure, retried.
 RunStatus = Literal["completed", "step_limit", "loop", "failed", "error"]
 
@@ -100,6 +102,12 @@ class CostMetrics(BaseModel):
     # tool names the level does not offer. Neither counts in `tool_calls` or `tool_errors`.
     invalid_tool_calls: int | None = None
     unknown_tool_calls: int | None = None
+    # Distinct characters of each paper's extracted text (`texts/<stem>.txt`) that reached the
+    # agent or a model in the run, keyed by file stem.
+    chars_read: dict[str, int] | None = None
+    # arXiv API requests and PDF downloads of the run that missed the shared caches.
+    arxiv_requests: int | None = None
+    pdf_downloads: int | None = None
 
     @property
     def total_tokens(self) -> int:
@@ -146,6 +154,13 @@ class RunRecord(BaseModel):
     cost: CostMetrics
     model: str
     temperature: float
+    # Sampling, token limit, thinking mode and served model; unknown in records written before
+    # they entered the configuration hash.
+    top_p: float | None = None
+    top_k: int | None = None
+    llm_max_tokens: int | None = None
+    enable_thinking: bool | None = None
+    server: ServerIdentity | None = None
     max_steps: int
     # Loop-guard limits (AGENT_MAX_REPEATED_CALLS, AGENT_MAX_TOOL_ERROR_STREAK); unknown in
     # records written before the loop guard existed.
