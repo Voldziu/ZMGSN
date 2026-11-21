@@ -33,9 +33,9 @@ Table~\ref{tab:variables} summarises the variables. The variable of interest is 
     \addlinespace
     Dependent & \emph{quality}: success, score, pass rate of each check; \emph{stability}: pass$^k$, rates of tool errors and malformed calls, spread of the score across repeats; \emph{cost}: total tokens (agent and tool-internal, input and output), LLM calls, tool calls, LLM time; \emph{flexibility}: success on tasks with an added requirement \\
     \addlinespace
-    Controlled & system and task prompts (identical across levels), $N=5$, temperature 0.7, at most 100 agent model calls, 8{,}192 completion tokens, 32{,}768-token context window, hardware, software versions, frozen data, check definitions \\
+    Controlled & system and task prompts (identical across levels), $N=5$, temperature 0.7, top-$p$ 0.95 and top-$k$ 20 for every model, one tool call per turn, at most 100 agent model calls, 8{,}192 completion tokens, 32{,}768-token context window, hardware, software versions, frozen data, check definitions \\
     \addlinespace
-    Blocking & scenario (10); repeat (10, each with a recorded random seed) \\
+    Blocking & scenario (10); repeat (3, each run with a recorded random seed) \\
     \addlinespace
     Covariate & prompt overhead of the tool schemas (input tokens of the first agent call) \\
     \bottomrule
@@ -47,43 +47,25 @@ Prompt complexity is the main confound. The instructions are identical at every 
 \subsection{Design}
 \label{sec:design}
 
-Within each model the design is fully crossed: three levels, ten scenarios and ten repeats give 300 runs on base tasks and as many on tasks with an added requirement, which makes 1{,}500 base runs and 1{,}500 variant runs over the five models. The baseline condition is the classical micro-tool decomposition, Level~1, with the reference model Qwen3.5-9B. Before the runs we warm and freeze the data caches (Section~\ref{sec:repro}). Within every block of one scenario and one repeat, the order of the levels is randomised, so that no level systematically pays for the first downloads. If the measured run time does not allow 3{,}000 runs, we first reduce the repeats on the variants to five.
+Within each model the design is fully crossed: three levels, ten scenarios and three repeats give 90 runs on base tasks and as many on tasks with an added requirement, which makes 450 base runs and 450 variant runs over the five models. The baseline condition is the classical micro-tool decomposition, Level~1, with the reference model Qwen3.5-9B. Before the runs we fill the data caches (Section~\ref{sec:repro}). Within every block of one scenario and one repeat, the order of the levels is randomised, so that no level systematically pays for the first downloads. Three repeats instead of the ten planned earlier keep the experiment within about a day of GPU time; the price is wider intervals on success rates (Section~\ref{sec:analysis}).
 
 \subsection{Metrics and analysis}
 \label{sec:analysis}
 
 \paragraph{Quality.} For each model and level we report the success rate with its 95\% Wilson interval~\citep{wilson1927probable}, the mean score and the pass rate of each check.
 
-\paragraph{Stability.} Following $\tau$-bench~\citep{yao2024taubench}, we report pass$^k$, the probability that all $k$ repeats of a scenario succeed. With $c$ successes in $n=10$ repeats of a scenario, we estimate it as $\binom{c}{k}/\binom{n}{k}$ and average over scenarios, for $k=1,\dots,10$. We also report the rates of tool errors and malformed calls.
+\paragraph{Stability.} Following $\tau$-bench~\citep{yao2024taubench}, we report pass$^k$, the probability that all $k$ repeats of a scenario succeed. With $c$ successes in $n=3$ repeats of a scenario, we estimate it as $\binom{c}{k}/\binom{n}{k}$ and average over scenarios, for $k=1,2,3$. We also report the rates of tool errors and malformed calls.
 
 \paragraph{Cost.} Total tokens, including tool-internal calls, are the primary cost measure, because they do not depend on the hardware. We also report input and output tokens separately: in a ReAct loop the input grows with every step, as the whole history is sent again, while generation time depends mainly on the output. LLM time complements the token counts for runs on the reference hardware. To relate quality and cost we use \emph{tokens per success}, the mean number of tokens per run divided by the success rate, which is the expected cost of one correct review; when success rates saturate, it reduces to a comparison of tokens. For each model we also plot the success rate of each level against its mean token count; H1 predicts that Level~2 lies on the Pareto front.
 
 \paragraph{Comparisons.} Differences between levels within one model, in success rate and in tokens, are estimated with 95\% confidence intervals from a cluster bootstrap over scenarios with 10{,}000 resamples~\citep{efron1993bootstrap}, because runs of the same scenario are correlated; we consider a difference supported when its interval excludes zero. RQ2 and RQ3 compare these differences across models. Finally, we analyse failures through the pass rates of the individual checks, the distribution of run states and the traces of typical failing runs.
 
-\subsection{Pilot study}
+\subsection{Pilot and diagnostic screen}
 \label{sec:pilot}
 
-The base system and the baseline are implemented and covered by 123 automated tests. A pilot on the reference hardware ran each configuration of the family comparison once: three models, three levels and ten scenarios with one repeat (90 runs, temperature 0.7), with the current tools and checks. All runs completed and none hit the step limit, so the success rule of Section~\ref{sec:evaluation} does not change the results in Table~\ref{tab:pilot}.
-
-\begin{table}[t]
-  \caption{Pilot study: successful runs out of 10 (mean score), one repeat per scenario.}
-  \label{tab:pilot}
-  \centering
-  \small
-  \begin{tabular}{@{}lccc@{}}
-    \toprule
-    Model & Level 1 & Level 2 & Level 3 \\
-    \midrule
-    Qwen3.5-9B & 10/10 (1.00) & 10/10 (1.00) & 10/10 (1.00) \\
-    Gemma 4 12B & 9/10 (0.99) & 10/10 (1.00) & 10/10 (1.00) \\
-    Llama 3.1 8B & 0/10 (0.46) & 1/10 (0.40) & 10/10 (1.00) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-Three observations shape the plan. First, Qwen3.5-9B succeeds in every run at every level, so for strong models success alone cannot separate the levels; cost and stability have to carry the comparison (H1a), and the scale comparison adds weaker models. Second, Llama~3.1 8B fails at Levels~1 and~2 (mean scores 0.46 and 0.40), and in 17 of these 20 runs it cites papers whose full text it never extracted; the fixed workflow of Level~3 prevents this. Third, Level~3 is at least as successful as Level~2 for every model. This is expected on the base task, which coincides with the workflow built into the macro-tool; whether Level~2 is the better compromise can therefore only be tested with the variants that add a requirement (H1b).
+The base system and the baseline are implemented and covered by automated tests. A pilot (90 runs, family comparison) and a diagnostic screen (150 runs: every model, level and base scenario once) were run on the reference hardware. Their numbers are not reported, because a methodology review of the screen changed the protocol (Section~\ref{sec:protocol-changes}). Three lessons shape the plan. First, Qwen3.5-9B succeeded in every run at every level, so for strong models success alone cannot separate the levels; cost and stability have to carry the comparison (H1a), and the scale comparison adds weaker models. Second, at Level~3 the review's structure, references and bibliography are written by code, so every Level~3 run passed every check, including a review on an unrelated topic; the checks of Table~\ref{tab:checks} measure format and provenance, not whether a model wrote a good review. Third, on the base task Level~3 is at least as successful as Level~2, because the task coincides with the workflow built into the macro-tool; whether Level~2 is the better compromise can therefore only be tested with the variants that add a requirement (H1b).
 
 \subsection{Threats to validity}
 \label{sec:threats}
 
-The size of the tool schemas is confounded with the level (Section~\ref{sec:variables}). Quantisation differs between models, most importantly within the scale comparison. All reported runs use one hardware platform, so absolute times do not transfer to other systems. The checks do not judge the quality or the topical relevance of the summaries. Finally, we designed the added requirements ourselves, and they favour levels that can compose new steps; we therefore report base tasks and variants separately instead of pooling them.
+The size of the tool schemas is confounded with the level (Section~\ref{sec:variables}). Quantisation differs between models: within the scale comparison the 9B model is 4-bit and the smaller ones are unquantised, so the scale effect may be underestimated, and within the family comparison Gemma's quantisation-aware-trained checkpoint likely loses less than the post-training AWQ of Qwen and Llama. The family comparison also spans generations (Llama~3.1 from 2024 against Qwen3.5 and Gemma~4 from 2026) and tool-call formats, so it compares these checkpoints as served, not model families in general. Levels~2 and~3 always read the first six chunks of a paper, whereas the Level~1 agent chooses how much to read; we record the characters read per paper to separate this from granularity. All reported runs use one hardware platform, so absolute times do not transfer to other systems. The checks do not judge the quality or the topical relevance of the summaries. Finally, we designed the added requirements ourselves, and they favour levels that can compose new steps; we therefore report base tasks and variants separately instead of pooling them.

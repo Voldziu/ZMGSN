@@ -441,7 +441,7 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
     </div>
     <div class="banner" style="margin-top: 18px;">
       <svg viewBox="0 0 24 24"><use href="#i-warn"/></svg>
-      <div><b>Zmienna zakłócająca:</b> schematy narzędzi ≈ 4,7k / 1,7k / 0,3k znaków JSON (L1 / L2 / L3) → mierzona jako kowariata</div>
+      <div><b>Zmienna zakłócająca:</b> schematy narzędzi ≈ 4,8k / 1,8k / 0,6k znaków JSON (L1 / L2 / L3) → mierzona jako kowariata</div>
     </div>
   </div>
 </section>
@@ -459,7 +459,7 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
             <tr><td class="mono">qwen</td><td>Qwen3.5 <span class="badge">BASELINE</span></td><td>9B</td><td>AWQ 4-bit</td></tr>
             <tr><td class="mono">gemma</td><td>Gemma 4</td><td>12B</td><td>QAT W4A16</td></tr>
             <tr><td class="mono">llama</td><td>Llama 3.1 Instruct</td><td>8B</td><td>AWQ INT4</td></tr>
-            <tr><td class="mono">qwen-mid</td><td>Qwen3.5</td><td>4B</td><td>FP8</td></tr>
+            <tr><td class="mono">qwen-mid</td><td>Qwen3.5</td><td>4B</td><td>BF16</td></tr>
             <tr><td class="mono">qwen-weak</td><td>Qwen3.5</td><td>0.8B</td><td>BF16</td></tr>
           </tbody>
         </table>
@@ -484,7 +484,7 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
     </div>
     <div class="banner" style="margin-top: 30px;">
       <svg viewBox="0 0 24 24"><use href="#i-warn"/></svg>
-      <div><b>Uwaga:</b> seria Qwen ma różne kwantyzacje (AWQ 4-bit · FP8 · BF16)</div>
+      <div><b>Uwaga:</b> 9B jest 4-bitowy, 4B i 0,8B bez kwantyzacji · wszystkie modele: top-p 0,95, top-k 20, jedno wywołanie narzędzia na turę</div>
     </div>
   </div>
 </section>
@@ -515,14 +515,14 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
       <div class="card">
         <div class="caps">Kontrolowane</div>
         <div class="chips" style="margin-top: 12px;">
-          <span class="chip">prompty</span><span class="chip">N = 5</span><span class="chip">T = 0,7</span><span class="chip">limit 100 wywołań</span><span class="chip">8192 tokeny</span><span class="chip">sprzęt</span><span class="chip">wersje oprogramowania</span><span class="chip">zamrożone dane</span>
+          <span class="chip">prompty</span><span class="chip">N = 5</span><span class="chip">T = 0,7 · top-p 0,95 · top-k 20</span><span class="chip">1 wywołanie / turę</span><span class="chip">limit 100 wywołań</span><span class="chip">8192 tokeny</span><span class="chip">sprzęt</span><span class="chip">wersje oprogramowania</span><span class="chip">zamrożone dane</span>
         </div>
       </div>
     </div>
     <div class="vrow">
       <div class="callout">
         <svg class="i"><use href="#i-refresh"/></svg>
-        <div><b>Bloki:</b> scenariusz (10) × powtórzenie (10, seed zapisywany)</div>
+        <div><b>Bloki:</b> scenariusz (10) × powtórzenie (3, seed zapisywany)</div>
       </div>
       <div class="banner">
         <svg viewBox="0 0 24 24"><use href="#i-warn"/></svg>
@@ -541,7 +541,7 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
       <thead><tr><th>Oś</th><th>Metryka główna</th><th>Pomocnicze</th></tr></thead>
       <tbody>
         <tr><td>Skuteczność</td><td>success = status <code>completed</code> i 10/10 checków</td><td class="muted">score, pass rate każdego checku</td></tr>
-        <tr><td>Stabilność</td><td>pass<sup>k</sup> (k = 1…10)</td><td class="muted">odsetek błędnych wywołań narzędzi</td></tr>
+        <tr><td>Stabilność</td><td>pass<sup>k</sup> (k = 1…3)</td><td class="muted">odsetek błędnych wywołań narzędzi</td></tr>
         <tr><td>Efektywność</td><td>tokeny: agent + wnętrze narzędzi, input i output osobno</td><td class="muted">wywołania LLM i narzędzi; czas samego LLM</td></tr>
         <tr><td>Elastyczność</td><td>success na wariantach z dodatkowym wymaganiem</td><td class="muted">—</td></tr>
       </tbody>
@@ -574,9 +574,9 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
       <div>
         <div class="card blue" style="margin-top: 14px;">
           <div class="caps" style="color: var(--blue);">Układ</div>
-          <div class="formula">5 × 3 × 10 × 10</div>
+          <div class="formula">5 × 3 × 10 × 3</div>
           <div style="font-size: 15px; color: var(--text); margin-top: 2px;">modeli × poziomy × scenariusze × powtórzenia</div>
-          <div style="font-size: 17px; color: var(--ink); margin-top: 10px; line-height: 1.45;"><b>1500</b> przebiegów bazowych + <b>1500</b> z dodatkowym wymaganiem</div>
+          <div style="font-size: 17px; color: var(--ink); margin-top: 10px; line-height: 1.45;"><b>450</b> przebiegów bazowych + <b>450</b> z dodatkowym wymaganiem</div>
         </div>
         <div style="margin-top: 16px;">
           <div class="caps">Dodatkowe wymaganie: jedno z 3 na scenariusz</div>
@@ -589,36 +589,69 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
   </div>
 </section>
 
-<!-- 11. 16 / Pilotaż -->
+<!-- 11. 16 / Screen diagnostyczny -->
 <section class="slide">
   <div class="left" style="width: 820px;">
-    <div class="label">16 / Pilotaż</div>
-    <h2 class="h">Pilotaż na RTX 5080</h2>
-    <div style="font-size: 17px; color: var(--muted); margin-top: 10px;">90 przebiegów · 1 powtórzenie · T = 0,7 · RTX 5080</div>
-    <table class="tbl ptbl" style="margin-top: 26px;">
-      <thead><tr><th>Model</th><th>L1</th><th>L2</th><th>L3</th></tr></thead>
-      <tbody>
-        <tr><td class="model">qwen</td><td><span class="pill ok">10/10<span>(1,00)</span></span></td><td><span class="pill ok">10/10<span>(1,00)</span></span></td><td><span class="pill ok">10/10<span>(1,00)</span></span></td></tr>
-        <tr><td class="model">gemma</td><td><span class="pill ok">9/10<span>(0,99)</span></span></td><td><span class="pill ok">10/10<span>(1,00)</span></span></td><td><span class="pill ok">10/10<span>(1,00)</span></span></td></tr>
-        <tr><td class="model">llama</td><td><span class="pill bad">0/10<span>(0,46)</span></span></td><td><span class="pill bad">1/10<span>(0,40)</span></span></td><td><span class="pill ok">10/10<span>(1,00)</span></span></td></tr>
-      </tbody>
-    </table>
-    <div style="font-size: 14px; color: var(--muted); margin-top: 14px;">success (w nawiasie średni score) · 10 scenariuszy na komórkę</div>
+    <div class="label">16 / Screen diagnostyczny</div>
+    <h2 class="h">Co pokazał screen na RTX 5080</h2>
+    <div style="font-size: 17px; color: var(--muted); margin-top: 10px;">150 przebiegów · 5 modeli × 3 poziomy × 10 scenariuszy · 1 powtórzenie · tylko diagnostyka</div>
+    <ul class="bullets" style="margin-top: 22px;">
+      <li style="font-size: 18px; margin-top: 14px;"><b>L3 zalicza z konstrukcji:</b> nagłówki, cytowania i bibliografię pisze kod → 50/50 przebiegów L3 z kompletem checków, także llama i model 0,8B</li>
+      <li style="font-size: 18px; margin-top: 14px;"><b>Recenzja nie na temat dostała 1,0:</b> zapytanie „arXiv 2310” zamiast modeli dyfuzyjnych → matematyka i QCD</li>
+      <li style="font-size: 18px; margin-top: 14px;"><b>Fałszywe porażki formatu:</b> 5 dobrych, przeczytanych prac i score 0,1, bo nagłówki <code>###</code></li>
+      <li style="font-size: 18px; margin-top: 14px;"><b>Nierówne warunki:</b> różne top-p/top-k i kwantyzacja, równoległe wywołania tylko poza llamą, L1 po cichu czytał 6 000 znaków pracy</li>
+    </ul>
   </div>
   <div class="panel blue-panel" style="width: 460px;">
-    <div class="panel-heading">Wnioski</div>
+    <div class="panel-heading">Wniosek</div>
     <ul class="bullets" style="margin-top: 14px;">
-      <li style="font-size: 17px; margin-top: 16px;">qwen osiąga sufit</li>
-      <li style="font-size: 17px; margin-top: 16px;">llama oblewa L1 i L2 (średni score 0,46 i 0,40); w 17 z tych 20 przebiegów cytuje prace, których tekstu nie wyekstrahowała (<code>papers_read</code>)</li>
-      <li style="font-size: 17px; margin-top: 16px;">L3 ≥ L2 na zadaniu bazowym → potrzebne warianty z dodatkowym wymaganiem, a koszt jako miara rozróżniająca</li>
+      <li style="font-size: 17px; margin-top: 16px;">10 checków mierzy <b>format i pochodzenie</b>, nie jakość recenzji</li>
+      <li style="font-size: 17px; margin-top: 16px;">4 niezależnych recenzentów + weryfikator: 13/15 ustaleń potwierdzonych, 2 częściowo</li>
+      <li style="font-size: 17px; margin-top: 16px;">liczby ze screena nie trafiają do pracy</li>
     </ul>
+  </div>
+</section>
+
+<!-- 11b. 17 / Zmiany protokołu -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">17 / Zmiany protokołu</div>
+    <h2 class="h">Poprawki przed pełnym eksperymentem</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 18px;">
+      <div class="card blue">
+        <div class="caps" style="color: var(--blue);">Protokół (przed runem)</div>
+        <ul class="bullets" style="margin-top: 8px;">
+          <li>jednakowe top-p/top-k, 1 wywołanie na turę, Qwen 4B w BF16</li>
+          <li>prompt opisuje wynik, nie kroki; L3 mówi „zadanie wykonane”</li>
+          <li>widoczny znacznik obcięcia, licznik znaków przeczytanych na pracę</li>
+          <li>L2/L3: jedno streszczenie zamiast sklejki 6 fragmentów</li>
+          <li>L1: <code>write_file</code> zamiast dopisywania</li>
+          <li>prewarm cache, brakujące PDF-y w cache, ponawianie samego scoringu</li>
+          <li>hash konfiguracji obejmuje serwowany model</li>
+        </ul>
+      </div>
+      <div>
+        <div class="card">
+          <div class="caps">Warianty zadań (H1b)</div>
+          <div style="font-size: 16px; color: var(--ink); margin-top: 6px; line-height: 1.45;">10 wariantów: tabela · po polsku · bez prac przeglądowych (4/3/3)</div>
+        </div>
+        <div class="card" style="margin-top: 14px;">
+          <div class="caps">Nowa ocena (w trakcie runu)</div>
+          <div style="font-size: 16px; color: var(--ink); margin-top: 6px; line-height: 1.45;">fakty z całego pliku · sędzia LLM (Qwen 9B, na ślepo, same liczby) · format osobno · dwie osie: jakość artefaktu i niezawodność agenta</div>
+        </div>
+        <div class="card" style="margin-top: 14px;">
+          <div class="caps">Analiza</div>
+          <div style="font-size: 16px; color: var(--ink); margin-top: 6px; line-height: 1.45;">H1a jako non-inferiority (margines 15 pp) z korektą Holma · tokeny w skali log · interakcje model × poziom</div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
 <!-- 12. 17 / Stan i następne kroki -->
 <section class="slide">
   <div class="pad">
-    <div class="label">17 / Stan i następne kroki</div>
+    <div class="label">18 / Stan i następne kroki</div>
     <h2 class="h">Stan implementacji i następne kroki</h2>
     <div class="status">
       <div class="done">
@@ -630,20 +663,18 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
           <li><svg class="i"><use href="#i-check"/></svg>runner z powtórzeniami</li>
           <li><svg class="i"><use href="#i-check"/></svg>MLflow</li>
           <li><svg class="i"><use href="#i-check"/></svg>5 presetów vLLM</li>
-          <li><svg class="i"><use href="#i-check"/></svg>123 testy</li>
+          <li><svg class="i"><use href="#i-check"/></svg>loop guard, paski postępu</li>
+          <li><svg class="i"><use href="#i-check"/></svg>screen 150 przebiegów + przegląd metodologii</li>
         </ul>
       </div>
       <div class="card next">
-        <div class="card-title">Następne (zajęcia 8–9)</div>
+        <div class="card-title">Następne</div>
         <ol>
-          <li><span>sukces tylko dla statusu <code>completed</code></span></li>
-          <li><span>czas LLM osobno od sieci</span></li>
-          <li><span>narzut promptu</span></li>
-          <li><span>liczenie błędnych wywołań</span></li>
-          <li><span>raport z pass<sup>k</sup> i przedziałami ufności</span></li>
+          <li><span>poprawki protokołu (w toku)</span></li>
           <li><span>warianty zadań</span></li>
-          <li><span>zamrożenie danych</span></li>
-          <li><span>pełny eksperyment</span></li>
+          <li><span>run: 900 przebiegów (3 powtórzenia)</span></li>
+          <li><span>sędzia LLM i nowa analiza</span></li>
+          <li><span>wyniki i dyskusja</span></li>
         </ol>
       </div>
     </div>

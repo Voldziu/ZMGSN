@@ -37,14 +37,14 @@
 
 ## 6. Server and launcher
 
-- [ ] 6.1 In `eval-presets.sh`: write a timestamped server log per invocation, export `TOOL_EVAL_PRESET_FILE`, send one warm-up tool request after the server is ready, and run `prewarm` once before the first preset.
-- [ ] 6.2 In `presets/cuda/qwen-mid.yaml`: remove `quantization: fp8` and set `gpu-memory-utilization: 0.75`. Update the budget table in `README.md`.
+- [x] 6.1 In `eval-presets.sh`: write a timestamped server log per invocation, export `TOOL_EVAL_PRESET_FILE`, send one warm-up tool request after the server is ready, and run `prewarm` once before the first preset.
+- [x] 6.2 In `presets/cuda/qwen-mid.yaml`: remove `quantization: fp8` and set `gpu-memory-utilization: 0.75`. Update the budget table in `README.md`.
 - [ ] 6.3 On the RTX, start `qwen-mid` and run `make tool-check PRESET=qwen-mid`. Record the GPU memory used. If 0.75 does not fit, try 0.8, and record the outcome in design.md.
 
 ## 7. Docs, paper and presentation
 
-- [ ] 7.1 Update `README.md`: sampling, parallel policy, prompt v3, `write_file`, synthesis step, cut marker, `prewarm`, new record fields and report columns.
-- [ ] 7.2 Update `docs/overleaf/methods.tex`:
+- [x] 7.1 Update `README.md`: sampling, parallel policy, prompt v3, `write_file`, synthesis step, cut marker, `prewarm`, new record fields and report columns.
+- [x] 7.2 Update `docs/overleaf/methods.tex`:
   - sampling values and that they are identical for every model;
   - one tool call per reply;
   - quantisation as served;
@@ -52,7 +52,7 @@
   - "text extracted" instead of "read in full";
   - the synthesis step and the visible cut;
   - new paragraph "Protocol changes after the pilot".
-- [ ] 7.3 Update `docs/overleaf/data_environment.tex` (prewarmed caches, cached missing PDFs, wording "read in full") and `docs/overleaf/experiment_plan.tex`:
+- [x] 7.3 Update `docs/overleaf/data_environment.tex` (prewarmed caches, cached missing PDFs, wording "read in full") and `docs/overleaf/experiment_plan.tex`:
   - R=3 and the run counts;
   - remove the pilot table and the conclusions drawn from it;
   - limitations: the confounds that remain.
@@ -60,7 +60,7 @@
 
 ## 8. Verification
 
-- [ ] 8.1 `make test`, ruff and mypy clean.
+- [x] 8.1 `make test`, ruff and mypy clean.
 - [ ] 8.2 Smoke run on the Mac: qwen-mid, all levels, 3 scenarios, REPEATS=1. Check that:
   - records carry the new fields;
   - no level-3 run calls the tool more than once without reason;
