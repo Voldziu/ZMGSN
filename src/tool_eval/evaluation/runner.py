@@ -22,7 +22,14 @@ from tool_eval.config import Settings, use_settings
 from tool_eval.evaluation.checks import CHECKS_VERSION, Lookup, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.loop_guard import LoopGuard
-from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
+from tool_eval.evaluation.models import (
+    REQUIREMENTS,
+    OutcomeScore,
+    Requirement,
+    RunRecord,
+    RunStatus,
+    Scenario,
+)
 from tool_eval.evaluation.progress import Progress, terminal_stderr
 from tool_eval.evaluation.server_identity import ServerIdentity, read_server_identity
 from tool_eval.evaluation.steps import StepLogger
@@ -32,7 +39,12 @@ from tool_eval.evaluation.tracing import (
     traced_run,
     tracing_enabled,
 )
-from tool_eval.exceptions import AgentLoopError, ExternalServiceError, InvalidInputError
+from tool_eval.exceptions import (
+    AgentLoopError,
+    ExternalServiceError,
+    InvalidInputError,
+    PromptNotFoundError,
+)
 from tool_eval.prompts import load_prompt
 from tool_eval.services.network import network_meter
 from tool_eval.services.reading import reading_meter
@@ -77,12 +89,37 @@ def config_fingerprint(settings: Settings, server: ServerIdentity | None = None)
         "prompt_version": settings.prompt_version,
         "system_prompt": load_prompt("system", settings.prompt_version).sha256,
         "task_prompt": load_prompt("evaluation", settings.prompt_version).sha256,
+        "requirement_prompts": {
+            requirement: _requirement_prompt_hash(requirement, settings.prompt_version)
+            for requirement in REQUIREMENTS
+        },
         "review_paper_count": settings.review_paper_count,
         "chunk_size": settings.chunk_size,
         "text_max_chars": settings.text_max_chars,
         "pipeline_max_chunks": settings.pipeline_max_chunks,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def requirement_prompt(requirement: Requirement, settings: Settings) -> str:
+    """The statement a variant task adds to the base task prompt.
+
+    Args:
+        requirement: The variant's requirement.
+        settings: Settings; their prompt version selects the file.
+
+    Returns:
+        The requirement statement.
+    """
+    return load_prompt(f"requirement_{requirement}", settings.prompt_version).text.strip()
+
+
+def _requirement_prompt_hash(requirement: Requirement, version: str) -> str | None:
+    """Hash of a requirement prompt; `None` for prompt versions that have none (v1, v2)."""
+    try:
+        return load_prompt(f"requirement_{requirement}", version).sha256
+    except PromptNotFoundError:
+        return None
 
 
 def arxiv_cache_dir(settings: Settings, runs_dir: Path) -> Path:
@@ -344,6 +381,8 @@ def run_single(
         date_from=str(scenario.date_from),
         date_to=str(scenario.date_to),
     )
+    if scenario.requirement is not None:
+        task = f"{task.rstrip()}\n\n{requirement_prompt(scenario.requirement, run_settings)}\n"
 
     started_at = datetime.now(UTC)
     status: RunStatus = "completed"
@@ -354,6 +393,8 @@ def run_single(
         "model": run_settings.llm_model,
         "level": level,
         "scenario": scenario.id,
+        "task_type": scenario.task_type,
+        "requirement": scenario.requirement or "",
         "repeat": repeat,
         "seed": run_settings.llm_seed,
         "order_seed": order_seed,
@@ -489,6 +530,9 @@ def run_single(
             trace_id=trace.trace_id,
             date_from=scenario.date_from,
             date_to=scenario.date_to,
+            task_type=scenario.task_type,
+            requirement=scenario.requirement,
+            base_scenario_id=scenario.base_id,
             started_at=started_at,
         )
         trace.finish(record, workspace / REVIEW_PATH)

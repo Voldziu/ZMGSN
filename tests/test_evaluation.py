@@ -115,8 +115,59 @@ def _mark_read(workspace: Path, arxiv_ids: Sequence[str]) -> None:
 
 def test_shipped_scenarios_are_valid() -> None:
     scenarios = load_scenarios(Path(__file__).parent.parent / "scenarios" / "scenarios.json")
-    assert len(scenarios) == 10
-    assert len({s.id for s in scenarios}) == 10
+    assert len(scenarios) == 20
+    assert len({s.id for s in scenarios}) == 20
+    bases = [s for s in scenarios if s.task_type == "base"]
+    variants = {s.base_id: s for s in scenarios if s.task_type == "variant"}
+    assert len(bases) == len(variants) == 10
+    # Requirements in turn over the base scenarios in file order: 4 / 3 / 3.
+    rotation = ["table", "polish", "no_surveys"]
+    assert [variants[b.id].requirement for b in bases] == [rotation[i % 3] for i in range(10)]
+    assert variants[bases[0].id].id == "rag-2024h1-table"
+
+
+def _scenario_file(tmp_path: Path, *entries: str) -> Path:
+    path = tmp_path / "s.json"
+    path.write_text("[" + ", ".join(entries) + "]", encoding="utf-8")
+    return path
+
+
+BASE_A = '{"id": "a", "topic": "topic", "date_from": "2024-01-01", "date_to": "2024-02-01"}'
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        # base does not exist
+        '{"id": "b-table", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "table", "base": "b"}',
+        # window differs from its base
+        '{"id": "a-table", "topic": "topic", "date_from": "2024-01-02", '
+        '"date_to": "2024-02-01", "requirement": "table", "base": "a"}',
+        # id not <base>-<requirement>
+        '{"id": "a-tab", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "table", "base": "a"}',
+        # requirement without base
+        '{"id": "a-table", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "table"}',
+    ],
+)
+def test_invalid_variants_are_rejected(tmp_path: Path, variant: str) -> None:
+    with pytest.raises(InvalidInputError):
+        load_scenarios(_scenario_file(tmp_path, BASE_A, variant))
+
+
+def test_variant_of_a_variant_is_rejected(tmp_path: Path) -> None:
+    variant = (
+        '{"id": "a-table", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "table", "base": "a"}'
+    )
+    nested = (
+        '{"id": "a-table-polish", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "polish", "base": "a-table"}'
+    )
+    with pytest.raises(InvalidInputError, match="a-table-polish"):
+        load_scenarios(_scenario_file(tmp_path, BASE_A, variant, nested))
 
 
 def test_scenarios_reject_duplicate_ids_and_bad_windows(tmp_path: Path) -> None:
@@ -1046,3 +1097,67 @@ def test_normal_final_reply_completes(tmp_path: Path, monkeypatch: pytest.Monkey
     )
     _, output = _run(tmp_path)
     assert load_records(output)[0].status == "completed"
+
+
+# --- task variants ---------------------------------------------------------------------------
+
+VARIANT = Scenario(
+    id="demo-polish",
+    topic=SCENARIO.topic,
+    date_from=SCENARIO.date_from,
+    date_to=SCENARIO.date_to,
+    requirement="polish",
+    base="demo",
+)
+
+
+def test_variant_prompt_is_the_base_prompt_plus_one_requirement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tasks: dict[str, str] = {}
+
+    def capture(agent: object, task: str, **kwargs: Any) -> None:
+        tasks[get_settings().workspace_dir.name] = task
+        _write_review(get_settings().workspace_dir, _review_text())
+
+    monkeypatch.setattr(runner, "build_agent", lambda level, *, settings=None: object())
+    monkeypatch.setattr(runner, "run_task", capture)
+    output = tmp_path / "results.jsonl"
+    run_evaluation(
+        scenarios=[SCENARIO, VARIANT],
+        levels=["level2"],
+        repeats=1,
+        output=output,
+        runs_dir=tmp_path / "runs",
+        settings=_settings(tmp_path / "unused"),
+        lookup=_lookup(_papers()),
+    )
+    base, variant = tasks["level2-demo-01"], tasks["level2-demo-polish-01"]
+    requirement = runner.requirement_prompt("polish", _settings(tmp_path))
+    assert "Polish" in requirement
+    assert variant == f"{base.rstrip()}\n\n{requirement}\n"
+    assert "Additional requirement" not in base
+    records = {r.scenario_id: r for r in load_records(output)}
+    assert (records["demo"].task_type, records["demo"].requirement) == ("base", None)
+    assert records["demo"].base_scenario_id == "demo"
+    assert records["demo-polish"].task_type == "variant"
+    assert records["demo-polish"].requirement == "polish"
+    assert records["demo-polish"].base_scenario_id == "demo"
+
+
+def test_old_records_load_as_base_tasks() -> None:
+    data = json.loads(_record("level1", "a", 1, score=1.0, tokens=10).model_dump_json())
+    old = {
+        k: v for k, v in data.items() if k not in {"task_type", "requirement", "base_scenario_id"}
+    }
+    loaded = RunRecord.model_validate(old)
+    assert (loaded.task_type, loaded.requirement) == ("base", None)
+
+
+def test_fingerprint_covers_the_requirement_prompts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path, prompt_version="v3")
+    base = runner.config_fingerprint(settings)
+    monkeypatch.setattr(runner, "_requirement_prompt_hash", lambda requirement, version: "x")
+    assert runner.config_fingerprint(settings) != base

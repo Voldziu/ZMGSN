@@ -11,8 +11,18 @@ from tool_eval.evaluation.server_identity import ServerIdentity
 RunStatus = Literal["completed", "step_limit", "loop", "failed", "error"]
 
 
+# Requirement a variant task adds to its base scenario (see `scenarios.load_scenarios`).
+Requirement = Literal["table", "polish", "no_surveys"]
+REQUIREMENTS: tuple[Requirement, ...] = ("table", "polish", "no_surveys")
+TaskType = Literal["base", "variant"]
+
+
 class Scenario(BaseModel):
-    """One task: a research topic and the arXiv submission-date window that counts."""
+    """One task: a research topic and the arXiv submission-date window that counts.
+
+    A variant names its base scenario (`base`) and the one requirement it adds; a base scenario
+    has neither.
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -20,13 +30,28 @@ class Scenario(BaseModel):
     topic: str = Field(min_length=3)
     date_from: date
     date_to: date
+    requirement: Requirement | None = None
+    base: str | None = None
 
     @model_validator(mode="after")
     def _check_window(self) -> Self:
         if self.date_from > self.date_to:
             msg = f"Scenario {self.id}: date_from is later than date_to"
             raise ValueError(msg)
+        if (self.requirement is None) != (self.base is None):
+            msg = f"Scenario {self.id}: a variant needs both `base` and `requirement`"
+            raise ValueError(msg)
         return self
+
+    @property
+    def task_type(self) -> TaskType:
+        """`variant` for a scenario with an added requirement, else `base`."""
+        return "base" if self.requirement is None else "variant"
+
+    @property
+    def base_id(self) -> str:
+        """Id of the base scenario; a base scenario's own id."""
+        return self.base or self.id
 
 
 class CriterionResult(BaseModel):
@@ -193,6 +218,10 @@ class RunRecord(BaseModel):
     trace_id: str | None = None
     date_from: date
     date_to: date
+    # Base task or variant with an added requirement; older records are base tasks.
+    task_type: TaskType = "base"
+    requirement: Requirement | None = None
+    base_scenario_id: str | None = None
     started_at: datetime
 
     @computed_field  # type: ignore[prop-decorator]

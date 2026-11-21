@@ -1,15 +1,15 @@
 ## 1. Scenarios
 
-- [ ] 1.1 Add `requirement` and `base` to `Scenario`. In `load_scenarios`, validate variants: `base` exists and is a base scenario, the topic and window match, and the id is `<base>-<requirement>`. Tests for each failure and for a valid file.
-- [ ] 1.2 Add the 10 variants to `scenarios/scenarios.json` in the `table` / `polish` / `no_surveys` rotation. Test: the file follows the rotation (4/3/3), and the first variant is `rag-2024h1-table`.
+- [x] 1.1 Add `requirement` and `base` to `Scenario`. In `load_scenarios`, validate variants: `base` exists and is a base scenario, the topic and window match, and the id is `<base>-<requirement>`. Tests for each failure and for a valid file.
+- [x] 1.2 Add the 10 variants to `scenarios/scenarios.json` in the `table` / `polish` / `no_surveys` rotation. Test: the file follows the rotation (4/3/3), and the first variant is `rag-2024h1-table`.
 
 ## 2. Prompts and runner
 
-- [ ] 2.1 Add `prompts/requirement_table/v3.md`, `prompts/requirement_polish/v3.md` and `prompts/requirement_no_surveys/v3.md`.
-- [ ] 2.2 In `run_single`, append the rendered requirement to the task prompt of variants. Test: the variant prompt equals the base prompt plus one requirement statement, and the base prompt is unchanged.
-- [ ] 2.3 Add the sha256 of the requirement prompts to `config_fingerprint`. Test: editing a requirement prompt changes the hash.
-- [ ] 2.4 Add `task_type`, `requirement` and `base_scenario_id` to `RunRecord`, with defaults for old records. Tests: a variant record carries the fields; an old record loads as `base`.
-- [ ] 2.5 Test that `--only` with variant ids and block ordering work for variants unchanged.
+- [x] 2.1 Add `prompts/requirement_table/v3.md`, `prompts/requirement_polish/v3.md` and `prompts/requirement_no_surveys/v3.md`.
+- [x] 2.2 In `run_single`, append the rendered requirement to the task prompt of variants. Test: the variant prompt equals the base prompt plus one requirement statement, and the base prompt is unchanged.
+- [x] 2.3 Add the sha256 of the requirement prompts to `config_fingerprint`. Test: editing a requirement prompt changes the hash.
+- [x] 2.4 Add `task_type`, `requirement` and `base_scenario_id` to `RunRecord`, with defaults for old records. Tests: a variant record carries the fields; an old record loads as `base`.
+- [x] 2.5 Test that `--only` with variant ids and block ordering work for variants unchanged.
 
 ## 3. Report
 
