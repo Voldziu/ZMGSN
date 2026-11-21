@@ -18,9 +18,9 @@
 
 ## 4. Docs and paper
 
-- [ ] 4.1 `README.md`: variant scenarios, requirement prompts, report sections.
-- [ ] 4.2 `docs/overleaf/data_environment.tex`: describe the implemented variants (ids, rotation, requirement wording), and remove "implemented in the next stage".
-- [ ] 4.3 `docs/overleaf/experiment_plan.tex`: 20 scenarios × 3 levels × 3 repeats per model (900 runs), and H1b tested as `level3 − level2` on variants.
+- [x] 4.1 `README.md`: variant scenarios, requirement prompts, report sections.
+- [x] 4.2 `docs/overleaf/data_environment.tex`: describe the implemented variants (ids, rotation, requirement wording), and remove "implemented in the next stage".
+- [x] 4.3 `docs/overleaf/experiment_plan.tex`: 20 scenarios × 3 levels × 3 repeats per model (900 runs), and H1b tested as `level3 − level2` on variants.
 - [ ] 4.4 `docs/presentations/src/progress-6-7.html`: add a slide on the variants and H1b to the plan slides, and regenerate the PDF.
 
 ## 5. Verification

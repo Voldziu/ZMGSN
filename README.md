@@ -139,7 +139,7 @@ uv run python -m tool_eval.main report                       # summary of result
 uv run python -m tool_eval.main report results/presets-*.jsonl --csv results/summary.csv   # all models
 ```
 
-Scenarios are in `scenarios/scenarios.json`. Run options: `--scenarios`, `--only`, `--levels`, `--repeats`, `--temperature`, `--output`, `--runs-dir`, `--order-seed`.
+Scenarios are in `scenarios/scenarios.json`: 10 base scenarios and one variant of each. A variant (`<base>-<requirement>`) has the same topic and window plus one added requirement, assigned in turn over the base scenarios: `table` (a comparison table under the main heading), `polish` (summaries in Polish) or `no_surveys` (no survey or review papers), 4/3/3. Its task prompt is the base prompt plus the statement in `prompts/requirement_<requirement>/v3.md`; the tools do not change. Records carry `task_type`, `requirement` and `base_scenario_id`. `ONLY=` runs all 20; list ids to run only base tasks or only variants. Run options: `--scenarios`, `--only`, `--levels`, `--repeats`, `--temperature`, `--output`, `--runs-dir`, `--order-seed`.
 
 Tools, prompts and text limits (prompt version `v3`, tool set version 4):
 - **Prompts describe the outcome** (papers, window, full-text summaries, file structure), not tool steps; the same prompts go to every level.
@@ -152,7 +152,7 @@ A run is successful only if it completed (it neither hit the step limit, nor was
 
 ## Report
 
-`report FILE...` combines results files, for example one per model, and summarises every model and level. It uses the scored runs: every run except those with an infrastructure error. It stops if a run of one model appears twice, whatever its configuration: a file passed twice, or two results files of the same model such as `smoke-qwen.jsonl` and `presets-qwen.jsonl`. The error names the run and both files. It warns when one model's runs come from different configurations. A value without data, such as the success rate of a level whose runs all ended in errors or repeatability with one repeat, is undefined (`-`), not zero. Sections:
+`report FILE...` combines results files, for example one per model, and summarises every model and level. Base tasks and variants get separate reports in one document and are never pooled; level differences pair scenarios of one task type, and the variant report adds the success rate by requirement. It uses the scored runs: every run except those with an infrastructure error. It stops if a run of one model appears twice, whatever its configuration: a file passed twice, or two results files of the same model such as `smoke-qwen.jsonl` and `presets-qwen.jsonl`. The error names the run and both files. It warns when one model's runs come from different configurations. A value without data, such as the success rate of a level whose runs all ended in errors or repeatability with one repeat, is undefined (`-`), not zero. Sections:
 
 - **Overview:** the success rate with its 95% Wilson interval, per model × level.
 - **Quality:** successes, mean score, and runs that hit the step limit, were stopped by the loop guard (`loop`), failed or had errors.
