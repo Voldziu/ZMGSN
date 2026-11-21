@@ -444,3 +444,55 @@ def test_new_tool_and_reading_measures_are_summarized() -> None:
     assert summary.mean_text_tool_calls == 1
     assert summary.mean_chars_read_per_paper == 12000
     assert summary.mean_cache_misses == 3
+
+
+def _variant(level: str, scenario: str, repeat: int, *, score: float, tokens: int) -> RunRecord:
+    record = _record(level, f"{scenario}-table", repeat, score=score, tokens=tokens)
+    return record.model_copy(
+        update={"task_type": "variant", "requirement": "table", "base_scenario_id": scenario}
+    )
+
+
+def test_base_and_variant_runs_are_reported_separately(tmp_path: Path) -> None:
+    from tool_eval.evaluation.report import compare_levels, render_markdown, summarize, write_csv
+
+    records = [
+        *(
+            _record(level, s, 1, score=1.0, tokens=100)
+            for level in ("level2", "level3")
+            for s in ("a", "b")
+        ),
+        *(_variant("level2", s, 1, score=1.0, tokens=200) for s in ("a", "b")),
+        *(_variant("level3", s, 1, score=0.5, tokens=50) for s in ("a", "b")),
+    ]
+    summaries = summarize(records)
+    assert [(s.task_type, s.level) for s in summaries] == [
+        ("base", "level2"),
+        ("base", "level3"),
+        ("variant", "level2"),
+        ("variant", "level3"),
+    ]
+    variant_diff = next(d for d in compare_levels(records) if d.task_type == "variant")
+    assert variant_diff.scenarios == 2
+    assert variant_diff.success_rate_diff == -1.0  # level3 - level2 on variants only
+    base_diff = next(d for d in compare_levels(records) if d.task_type == "base")
+    assert base_diff.success_rate_diff == 0.0
+
+    text = render_markdown(records)
+    assert "# Evaluation report: base tasks" in text
+    assert "# Evaluation report: variants with an added requirement" in text
+    assert "## Success by requirement" in text
+    assert "| m | level3 | table | 2 | 0% |" in text
+
+    path = tmp_path / "s.csv"
+    write_csv(summaries, path)
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    assert [row["task_type"] for row in rows] == ["base", "base", "variant", "variant"]
+
+
+def test_base_only_results_have_no_variant_section() -> None:
+    from tool_eval.evaluation.report import render_markdown
+
+    text = render_markdown([_record("level1", "a", 1, score=1.0, tokens=10)])
+    assert text.startswith("# Evaluation report\n")
+    assert "variant" not in text

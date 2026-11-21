@@ -13,8 +13,8 @@
 
 ## 3. Report
 
-- [ ] 3.1 In `report.py`, split records by task type, render a variant section (the same tables, plus success by requirement), and pair level differences within a task type. Tests: mixed file, base-only file, and `level3 − level2` on variants only.
-- [ ] 3.2 Add a `task_type` column to the CSV, with one row per model, level and task type. Update the CSV test.
+- [x] 3.1 In `report.py`, split records by task type, render a variant section (the same tables, plus success by requirement), and pair level differences within a task type. Tests: mixed file, base-only file, and `level3 − level2` on variants only.
+- [x] 3.2 Add a `task_type` column to the CSV, with one row per model, level and task type. Update the CSV test.
 
 ## 4. Docs and paper
 

@@ -38,6 +38,7 @@ class LevelSummary(BaseModel):
 
     model: str
     level: str
+    task_type: str = "base"  # base task or variant with an added requirement
     runs: int
     error_runs: int
     failed_runs: int
@@ -95,6 +96,7 @@ class LevelDifference(BaseModel):
     model: str
     level_a: str
     level_b: str
+    task_type: str = "base"
     scenarios: int
     success_rate_diff: float
     success_rate_ci: tuple[float, float]
@@ -159,12 +161,14 @@ def summarize(records: Sequence[RunRecord]) -> list[LevelSummary]:
         records: Run records, possibly from several models and levels.
 
     Returns:
-        Summaries, models in order of first appearance and levels by name (runs are stored in
-        a random level order).
+        Summaries, base tasks before variants, then models in order of first appearance and
+        levels by name (runs are stored in a random level order). Base tasks and variants are
+        never pooled.
     """
     return [
-        _summarize_group(model, level, items)
-        for (model, level), items in _by_model_and_level(records).items()
+        _summarize_group(model, level, items, task_type)
+        for task_type, subset in _by_task_type(records).items()
+        for (model, level), items in _by_model_and_level(subset).items()
     ]
 
 
@@ -181,8 +185,18 @@ def compare_levels(records: Sequence[RunRecord]) -> list[LevelDifference]:
         records: Run records, possibly from several models.
 
     Returns:
-        One difference per model and pair of levels that share a scenario.
+        One difference per task type, model and pair of levels that share a scenario; base
+        tasks and variants are compared separately.
     """
+    return [
+        difference.model_copy(update={"task_type": task_type})
+        for task_type, subset in _by_task_type(records).items()
+        for difference in _compare_within(subset)
+    ]
+
+
+def _compare_within(records: Sequence[RunRecord]) -> list[LevelDifference]:
+    """Level differences of records of one task type."""
     groups = _by_model_and_level(_scored(records))
     levels_of: dict[str, list[str]] = defaultdict(list)
     for model, level in groups:
@@ -244,16 +258,50 @@ def write_csv(summaries: Sequence[LevelSummary], path: Path) -> None:
 def render_markdown(records: Sequence[RunRecord]) -> str:
     """Render the full report: overview, quality, stability, cost, comparisons and run lists.
 
+    Base tasks and variants with an added requirement get separate reports in one document;
+    the variant report also breaks success down by requirement.
+
     Args:
         records: Run records to report on, possibly from several models.
 
     Returns:
         Markdown text.
     """
+    by_type = _by_task_type(records)
+    if set(by_type) <= {"base"}:
+        return _render(records, "# Evaluation report")
+    parts = []
+    if "base" in by_type:
+        parts.append(_render(by_type["base"], "# Evaluation report: base tasks"))
+    variants = by_type["variant"]
+    parts.append(
+        _render(variants, "# Evaluation report: variants with an added requirement")
+        + "\n## Success by requirement\n\n"
+        + format_markdown_table(
+            ["model", "level", "requirement", "runs", "success"],
+            _requirement_rows(variants),
+        )
+        + "\n"
+    )
+    return "\n".join(parts)
+
+
+def _requirement_rows(records: Sequence[RunRecord]) -> list[list[str]]:
+    groups: dict[tuple[str, str, str], list[RunRecord]] = defaultdict(list)
+    for record in _scored(records):
+        groups[record.model, record.level, record.requirement or _MISSING].append(record)
+    rows = []
+    for (model, level, requirement), items in groups.items():
+        rate = sum(r.success for r in items) / len(items)
+        rows.append([model, level, requirement, str(len(items)), _pct(rate)])
+    return sorted(rows, key=lambda row: (row[0], row[1], row[2]))
+
+
+def _render(records: Sequence[RunRecord], title: str) -> str:
     summaries = summarize(records)
     levels = sorted({s.level for s in summaries})
     sections = [
-        "# Evaluation report",
+        title,
         *_configuration_warnings(records),
         "Metrics use the scored runs: every run except those with an infrastructure error. "
         "A run succeeds only if it completed (no step limit, no loop, not failed) and passed every "
@@ -447,6 +495,14 @@ def _scored(records: Iterable[RunRecord]) -> list[RunRecord]:
     return [r for r in records if _is_scored(r)]
 
 
+def _by_task_type(records: Sequence[RunRecord]) -> dict[str, list[RunRecord]]:
+    """Split records into base tasks and variants, base first; empty types are left out."""
+    groups: dict[str, list[RunRecord]] = {"base": [], "variant": []}
+    for record in records:
+        groups[record.task_type].append(record)
+    return {task_type: items for task_type, items in groups.items() if items}
+
+
 def _by_model_and_level(records: Sequence[RunRecord]) -> dict[tuple[str, str], list[RunRecord]]:
     """Group records by model (first appearance) and level (by name)."""
     model_order = {
@@ -465,7 +521,9 @@ def _by_scenario(records: Iterable[RunRecord]) -> dict[str, list[RunRecord]]:
     return dict(groups)
 
 
-def _summarize_group(model: str, level: str, items: Sequence[RunRecord]) -> LevelSummary:
+def _summarize_group(
+    model: str, level: str, items: Sequence[RunRecord], task_type: str = "base"
+) -> LevelSummary:
     valid = _scored(items)
     by_scenario = _by_scenario(valid)
     scenario_scores = [[_score(r) for r in group] for group in by_scenario.values()]
@@ -490,6 +548,7 @@ def _summarize_group(model: str, level: str, items: Sequence[RunRecord]) -> Leve
     return LevelSummary(
         model=model,
         level=level,
+        task_type=task_type,
         runs=len(valid),
         error_runs=len(items) - len(valid),
         failed_runs=sum(r.status == "failed" for r in valid),
