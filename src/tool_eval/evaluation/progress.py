@@ -66,6 +66,7 @@ class Progress:
         self._finished = finished_runs
         self._repeats = repeats
         self._scenarios = scenarios
+        self._scenario_id = ""
         self._bars: list[tqdm[Never]] = []
 
     @property
@@ -111,7 +112,7 @@ class Progress:
                 initial=self._finished,
             ),
             bar(2, self._repeats, "repeat  ", "{desc} |{bar}| {n_fmt}/{total_fmt}"),
-            bar(3, self._scenarios, "scenario", "{desc} |{bar}| {n_fmt}/{total_fmt} {postfix}"),
+            bar(3, self._scenarios, "scenario", "{desc} |{bar}| {n_fmt}/{total_fmt}"),
         ]
         return self
 
@@ -136,12 +137,15 @@ class Progress:
         """The `index`-th (1-based) scenario of the repeat starts."""
         if self._bars:
             _set(self._bars[3], index - 1)
+            self._scenario_id = scenario_id
             self._bars[3].set_description_str(f"scenario {scenario_id}")
 
     def run(self, level: str, position: int, size: int) -> None:
         """A run of `level` starts at `position` of its block's `size` planned levels."""
         if self._bars:
-            self._bars[3].set_postfix_str(f"{level} ({position}/{size})")
+            self._bars[3].set_description_str(
+                f"scenario {self._scenario_id} · {level} ({position}/{size})"
+            )
 
     def run_done(self) -> None:
         """The current run finished."""
