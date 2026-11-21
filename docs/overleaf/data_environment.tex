@@ -1,0 +1,65 @@
+\section{Data and Environment}
+\label{sec:data}
+
+\subsection{Task}
+\label{sec:task}
+
+Every run gives the agent the same assignment: prepare a literature review of $N=5$ distinct arXiv papers on a given topic, submitted within a given date window. The agent must read each paper in full before summarising it and must replace any paper it cannot read with another one. It saves the result to \texttt{reviews/review.md} with a fixed structure: a first-level heading with the topic; one second-level section per paper, headed by the paper's number and exact title and containing its APA reference on a single line (ending with the arXiv URL) followed by a summary of a few sentences; and a final \texttt{Bibliography} section that lists the same references. The system prompt forbids inventing papers or identifiers and requires every summary to be based on the full text obtained with the tools rather than on search results or abstracts. Both prompts are identical at every tool level (Section~\ref{sec:levels}); only the set of tools changes.
+
+\subsection{Scenarios}
+\label{sec:scenarios}
+
+A scenario fixes the topic and the date window. Table~\ref{tab:scenarios} lists the ten scenarios: eight topics come from machine learning and natural language processing, one from quantum computing and one from computational biology. The windows span six or twelve months between 2022 and 2024 and are all closed, so the pool of eligible papers no longer grows and can be frozen before the main experiment (Section~\ref{sec:repro}). The same scenarios are used for every model and every level.
+
+\begin{table}[t]
+  \caption{Evaluation scenarios. Each run asks for $N=5$ papers submitted within the window.}
+  \label{tab:scenarios}
+  \centering
+  \small
+  \begin{tabular}{@{}llr@{}}
+    \toprule
+    Topic & Window & Months \\
+    \midrule
+    retrieval augmented generation & 2024-01-01 -- 2024-06-30 & 6 \\
+    graph neural networks & 2023-01-01 -- 2023-06-30 & 6 \\
+    diffusion models image generation & 2023-07-01 -- 2023-12-31 & 6 \\
+    reinforcement learning from human feedback & 2024-01-01 -- 2024-12-31 & 12 \\
+    federated learning privacy & 2022-01-01 -- 2022-12-31 & 12 \\
+    quantum error correction & 2023-01-01 -- 2023-12-31 & 12 \\
+    protein structure prediction & 2022-07-01 -- 2023-06-30 & 12 \\
+    time series forecasting transformers & 2023-01-01 -- 2023-12-31 & 12 \\
+    large language model hallucination & 2024-01-01 -- 2024-12-31 & 12 \\
+    explainable artificial intelligence & 2022-01-01 -- 2022-12-31 & 12 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Variants with an added requirement.}
+To measure flexibility, every scenario also has a variant whose task prompt adds one requirement that the base workflow does not cover: a comparison table of the selected papers placed under the main heading, summaries written in Polish, or the exclusion of survey and review papers. The three requirements are assigned to the scenarios in turn, so that they cover four, three and three scenarios. Each requirement is verified by one additional binary check, while the ten base checks still apply (Section~\ref{sec:evaluation}). The variants belong to the experimental plan and are implemented in the next stage of the project.
+
+\subsection{Data sources}
+\label{sec:sources}
+
+\paragraph{arXiv metadata.}
+All searches use the public arXiv API (\texttt{export.arxiv.org/api/query}). A query combines the topic terms with a \texttt{submittedDate} filter for the scenario window and sorts the results by relevance; the tools apply the window, so the agent cannot leave it. The client keeps at least three seconds between requests, retries rate-limit (HTTP 429), server and timeout errors with up to five attempts in total and an exponential backoff of 5--40\,s (honouring \texttt{Retry-After}), and caches every successful response on disk under a hash of its query parameters.
+
+\paragraph{Full texts.}
+PDFs are downloaded from \texttt{arxiv.org/pdf/<id>} (at most 100\,MB), and their text is extracted with pypdf. The text is split into chunks of 3{,}000 characters with a 200-character overlap, of which at most the first six (about 17{,}000 characters) are kept; the model summarises a chunk in two to four sentences.
+
+\paragraph{Wikipedia.}
+Level~1 also offers a Wikipedia search that returns the opening sentences of matching articles as background information. The task does not need it, and it plays no role in the evaluation.
+
+\paragraph{Ground truth.}
+There is no gold set of papers: any paper that satisfies the constraints is acceptable. Instead, the evaluator checks facts about the cited papers---existence, title and the submission date of the first version---against arXiv metadata retrieved by identifier through the same cache (Section~\ref{sec:evaluation}).
+
+\subsection{Execution environment}
+\label{sec:environment}
+
+All reported experiments run on one workstation with an NVIDIA RTX~5080 GPU (16\,GB) under WSL2. Models are served by vLLM~0.33.0~\citep{kwon2023vllm} in a Docker container built on a CUDA~13.0.2 image and exposed through an OpenAI-compatible API; one model is served at a time, with a 32{,}768-token context window. The agent runs on Python~3.12 with LangChain~1.4.4 and LangGraph~1.2.14, reaches the server through langchain-openai~1.7.0 and is traced with MLflow~3.18~\citep{zaharia2018mlflow}, which runs in Docker with SQLite storage. A development setup on Apple silicon (Apple M5 Pro, 24\,GB) serves the same model families through vllm-metal with differently quantised MLX weights; its runs serve only for debugging and are never mixed with the reported results.
+
+Each run receives a fresh workspace directory that acts as a sandbox. Tools may read and write only inside it (the Level~1 file tools accept only Markdown and text files), and it collects the run's artefacts: downloaded PDFs, extracted texts, chunks, summaries and the final review.
+
+\subsection{Reproducibility}
+\label{sec:repro}
+
+Every run is stored as one JSON record with the model, level, scenario, repeat, sampling seed, prompt hashes, check results, cost counters and a hash of every setting that affects results; records with different hashes are never pooled. The data are the main threat to reproducibility. arXiv is a live service: search results drift as papers are added or revised, PDFs are fetched without a version suffix, and rate limiting already aborted runs during development. The caches are local, so two machines may see different data. Before the main experiment we will therefore warm the caches for all scenarios, freeze them and archive them with checksums next to the results, so that every model and level sees the same search results and texts; we will also pin the model weights to fixed revisions. Finally, papers from 2022--2024 may be part of the models' training data. The evaluation does not depend on what a model remembers, and the \texttt{papers\_read} check ensures that the agent actually extracted the full text of every paper it cites.

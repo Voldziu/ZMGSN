@@ -1,0 +1,89 @@
+\section{Experimental Plan}
+\label{sec:plan}
+
+\subsection{Research questions and hypotheses}
+\label{sec:hypotheses}
+
+\textbf{RQ1.} How does tool granularity affect the success, stability and cost of a small local agent? We split the hypothesis that Level~2 is the optimal compromise into two testable parts:
+\begin{itemize}
+  \item \textbf{H1a.} On base tasks, Level~2 reaches a success rate no lower than Level~1 at a lower cost in tokens per success.
+  \item \textbf{H1b.} On tasks with an added requirement, Level~2 reaches a higher success rate than Level~3.
+\end{itemize}
+Together, H1a and H1b state that Level~2 lies on the success--cost Pareto front for both kinds of task: it matches micro-tools at a lower cost and keeps the flexibility that the macro-tool lacks.
+
+\textbf{RQ2.} Does the effect of granularity hold across model families of similar size (Qwen3.5-9B, Gemma~4 12B and Llama~3.1 8B)?
+
+\textbf{RQ3.} How does the effect change with model scale within one family (Qwen3.5 with 0.8B, 4B and 9B parameters)? Following MCP-GRANITE~\citep{paschalides2026granite}, we expect coarser tools to help the smaller models most.
+
+\subsection{Variables}
+\label{sec:variables}
+
+Table~\ref{tab:variables} summarises the variables. The variable of interest is the tool granularity level; the model and the task type are further factors. Scenario and repeat are blocking factors: runs of the same scenario share data and difficulty and are therefore correlated.
+
+\begin{table}[t]
+  \caption{Variables of the experiment.}
+  \label{tab:variables}
+  \centering
+  \small
+  \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Role & Variables \\
+    \midrule
+    Independent & tool granularity level (1, 2, 3); model (five models in two comparisons); task type (base, added requirement) \\
+    \addlinespace
+    Dependent & \emph{quality}: success, score, pass rate of each check; \emph{stability}: pass$^k$, rates of tool errors and malformed calls, spread of the score across repeats; \emph{cost}: total tokens (agent and tool-internal, input and output), LLM calls, tool calls, LLM time; \emph{flexibility}: success on tasks with an added requirement \\
+    \addlinespace
+    Controlled & system and task prompts (identical across levels), $N=5$, temperature 0.7, at most 100 agent model calls, 8{,}192 completion tokens, 32{,}768-token context window, hardware, software versions, frozen data, check definitions \\
+    \addlinespace
+    Blocking & scenario (10); repeat (10, each with a recorded random seed) \\
+    \addlinespace
+    Covariate & prompt overhead of the tool schemas (input tokens of the first agent call) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Prompt complexity is the main confound. The instructions are identical at every level, but the tool schemas differ in size (Section~\ref{sec:levels}). Because this difference cannot be removed without changing the levels themselves, we record it as a covariate and report it next to the results.
+
+\subsection{Design}
+\label{sec:design}
+
+Within each model the design is fully crossed: three levels, ten scenarios and ten repeats give 300 runs on base tasks and as many on tasks with an added requirement, which makes 1{,}500 base runs and 1{,}500 variant runs over the five models. The baseline condition is the classical micro-tool decomposition, Level~1, with the reference model Qwen3.5-9B. Before the runs we warm and freeze the data caches (Section~\ref{sec:repro}). Within every block of one scenario and one repeat, the order of the levels is randomised, so that no level systematically pays for the first downloads. If the measured run time does not allow 3{,}000 runs, we first reduce the repeats on the variants to five.
+
+\subsection{Metrics and analysis}
+\label{sec:analysis}
+
+\paragraph{Quality.} For each model and level we report the success rate with its 95\% Wilson interval~\citep{wilson1927probable}, the mean score and the pass rate of each check.
+
+\paragraph{Stability.} Following $\tau$-bench~\citep{yao2024taubench}, we report pass$^k$, the probability that all $k$ repeats of a scenario succeed. With $c$ successes in $n=10$ repeats of a scenario, we estimate it as $\binom{c}{k}/\binom{n}{k}$ and average over scenarios, for $k=1,\dots,10$. We also report the rates of tool errors and malformed calls.
+
+\paragraph{Cost.} Total tokens, including tool-internal calls, are the primary cost measure, because they do not depend on the hardware. We also report input and output tokens separately: in a ReAct loop the input grows with every step, as the whole history is sent again, while generation time depends mainly on the output. LLM time complements the token counts for runs on the reference hardware. To relate quality and cost we use \emph{tokens per success}, the mean number of tokens per run divided by the success rate, which is the expected cost of one correct review; when success rates saturate, it reduces to a comparison of tokens. For each model we also plot the success rate of each level against its mean token count; H1 predicts that Level~2 lies on the Pareto front.
+
+\paragraph{Comparisons.} Differences between levels within one model, in success rate and in tokens, are estimated with 95\% confidence intervals from a cluster bootstrap over scenarios with 10{,}000 resamples~\citep{efron1993bootstrap}, because runs of the same scenario are correlated; we consider a difference supported when its interval excludes zero. RQ2 and RQ3 compare these differences across models. Finally, we analyse failures through the pass rates of the individual checks, the distribution of run states and the traces of typical failing runs.
+
+\subsection{Pilot study}
+\label{sec:pilot}
+
+The base system and the baseline are implemented and covered by 123 automated tests. A pilot on the reference hardware ran each configuration of the family comparison once: three models, three levels and ten scenarios with one repeat (90 runs, temperature 0.7), with the current tools and checks. All runs completed and none hit the step limit, so the success rule of Section~\ref{sec:evaluation} does not change the results in Table~\ref{tab:pilot}.
+
+\begin{table}[t]
+  \caption{Pilot study: successful runs out of 10 (mean score), one repeat per scenario.}
+  \label{tab:pilot}
+  \centering
+  \small
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Model & Level 1 & Level 2 & Level 3 \\
+    \midrule
+    Qwen3.5-9B & 10/10 (1.00) & 10/10 (1.00) & 10/10 (1.00) \\
+    Gemma 4 12B & 9/10 (0.99) & 10/10 (1.00) & 10/10 (1.00) \\
+    Llama 3.1 8B & 0/10 (0.46) & 1/10 (0.40) & 10/10 (1.00) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three observations shape the plan. First, Qwen3.5-9B succeeds in every run at every level, so for strong models success alone cannot separate the levels; cost and stability have to carry the comparison (H1a), and the scale comparison adds weaker models. Second, Llama~3.1 8B fails at Levels~1 and~2 (mean scores 0.46 and 0.40), and in 17 of these 20 runs it cites papers whose full text it never extracted; the fixed workflow of Level~3 prevents this. Third, Level~3 is at least as successful as Level~2 for every model. This is expected on the base task, which coincides with the workflow built into the macro-tool; whether Level~2 is the better compromise can therefore only be tested with the variants that add a requirement (H1b).
+
+\subsection{Threats to validity}
+\label{sec:threats}
+
+The size of the tool schemas is confounded with the level (Section~\ref{sec:variables}). Quantisation differs between models, most importantly within the scale comparison. All reported runs use one hardware platform, so absolute times do not transfer to other systems. The checks do not judge the quality or the topical relevance of the summaries. Finally, we designed the added requirements ourselves, and they favour levels that can compose new steps; we therefore report base tasks and variants separately instead of pooling them.

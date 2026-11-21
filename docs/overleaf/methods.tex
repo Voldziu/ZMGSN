@@ -1,0 +1,157 @@
+\section{Methods}
+\label{sec:methods}
+
+\subsection{Agent architecture}
+\label{sec:architecture}
+
+Figure~\ref{fig:architecture} shows the system. A runner turns a scenario into the task prompt, creates a fresh workspace, draws a sampling seed and starts a single tool-calling agent. The agent is built with LangChain's \texttt{create\_agent}, which compiles a two-node LangGraph loop: the model node calls the LLM, and the tools node executes the tool calls that the model returned, until the model answers without a tool call. This is the ReAct pattern~\citep{yao2023react} realised through native function calling: the JSON schemas of the level's tools are sent with every request, and the model-specific tool-call parser of vLLM converts the model output into structured calls, so the client never parses free text. We do not impose an explicit ``Thought:'' format, and thinking modes are switched off where a model has one; any reasoning appears in the ordinary text of the model's reply.
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}[
+      font=\scriptsize,
+      box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt,
+                  minimum height=10mm, text width=22mm},
+      wide/.style={box, text width=28mm},
+      flow/.style={-{Stealth[length=1.6mm]}, semithick},
+      both/.style={{Stealth[length=1.6mm]}-{Stealth[length=1.6mm]}, semithick},
+      aux/.style={-{Stealth[length=1.6mm]}, densely dashed},
+    ]
+    \node[box]  (scenario)  at (0, 0)       {\textbf{Scenario}\\topic, date window};
+    \node[box]  (runner)    at (3.0, 0)     {\textbf{Runner}\\task prompt, seed,\\fresh workspace};
+    \node[box]  (model)     at (6.3, 0.95)  {\textbf{Model node}\\one LLM call};
+    \node[box]  (tools)     at (6.3, -0.95) {\textbf{Tools node}\\runs the tool calls};
+    \node[wide] (vllm)      at (10.0, 0.95) {\textbf{vLLM server}\\OpenAI-compatible API,\\native tool calling};
+    \node[wide] (toolset)   at (10.0, -0.95){\textbf{Tools of one level}\\L1: 12 \quad L2: 4 \quad L3: 1};
+    \node[wide] (services)  at (10.0, -3.0) {\textbf{Services}\\arXiv API and cache,\\PDF text, workspace files};
+    \node[wide] (review)    at (6.3, -3.0)  {\textbf{Review file}\\\texttt{reviews/review.md}};
+    \node[box]  (evaluator) at (3.0, -3.0)  {\textbf{Evaluator}\\10 binary checks};
+    \node[box]  (record)    at (0, -3.0)    {\textbf{Run record}\\JSONL and MLflow trace};
+    \begin{scope}[on background layer]
+      \node[draw, densely dashed, rounded corners=3pt, fill=black!4, inner sep=4pt,
+            fit=(model)(tools)] (agent) {};
+    \end{scope}
+    \node[font=\scriptsize\bfseries, anchor=south] at (agent.north) {ReAct agent (LangGraph)};
+
+    \draw[flow] (scenario) -- (runner);
+    \draw[flow] (runner) -- (runner -| agent.west) node[midway, above] {task};
+    \draw[flow] ([xshift=-4mm]model.south) -- ([xshift=-4mm]tools.north)
+                node[midway, left] {calls};
+    \draw[flow] ([xshift=4mm]tools.north) -- ([xshift=4mm]model.south)
+                node[midway, right] {results};
+    \draw[both] (model) -- (vllm);
+    \draw[flow] (tools) -- (toolset);
+    \draw[flow] (toolset) -- (services);
+    \draw[aux]  ([xshift=11mm]toolset.north) -- ([xshift=11mm]vllm.south)
+                node[midway, left, align=right] {LLM calls\\inside tools};
+    \draw[flow] (services) -- (review);
+    \draw[flow] (review) -- (evaluator);
+    \draw[flow] (evaluator) -- (record);
+    \draw[aux]  (runner.south) -- ++(0, -0.45) -| (record.north)
+                node[pos=0.25, above] {tokens, calls, time};
+  \end{tikzpicture}
+  \caption{System architecture. The runner turns a scenario into the task prompt and starts the agent, a LangGraph loop that alternates between model calls served by vLLM and the execution of tool calls. Only the set of tools changes between levels; LLM-backed tools call the same model (dashed). After the agent stops, the evaluator scores the review file, and the run record stores the checks, the cost counters collected during the run (dashed) and the configuration.}
+  \label{fig:architecture}
+\end{figure}
+
+A run ends in one of four states. It is \emph{completed} when the agent stops on its own. It hits the \emph{step limit} after 100 model calls of the agent loop (LLM calls made inside tools do not count). It has \emph{failed} when the context window overflows or when the final reply is cut off at the 8{,}192-token completion limit without a tool call. It ends with an infrastructure \emph{error} when, for example, arXiv cannot be reached while the review is scored; such runs are excluded and repeated. A failing tool call is not an error in this sense: its error message is returned to the model, which can correct its input or choose another approach, as the system prompt instructs.
+
+\subsection{Tool granularity levels}
+\label{sec:levels}
+
+The three levels expose the same capabilities, partitioned into tools of different size (Table~\ref{tab:tools}). All tools are thin wrappers over one service layer (arXiv client, PDF pipeline, LLM operations and workspace files), so the levels differ only in how much of the workflow a single call performs.
+
+\begin{table}[t]
+  \caption{Tools per granularity level. Tools marked $^\ast$ call the LLM internally.}
+  \label{tab:tools}
+  \centering
+  \small
+  \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Level & Tools \\
+    \midrule
+    1 (12 micro-tools) & \texttt{search\_arxiv}, \texttt{search\_wikipedia}, \texttt{download\_pdf}, \texttt{extract\_text\_from\_pdf}, \texttt{split\_text\_into\_chunks}, \texttt{summarize\_chunk}$^\ast$, \texttt{extract\_keywords}$^\ast$, \texttt{translate\_text}$^\ast$, \texttt{format\_apa\_citation}, \texttt{create\_markdown\_table}, \texttt{append\_to\_file}, \texttt{read\_file} \\
+    \addlinespace
+    2 (4 medium tools) & \texttt{search\_papers} (arXiv search that returns APA references), \texttt{get\_and\_summarize\_paper}$^\ast$ (download, extract, split and summarise one paper), \texttt{write\_review} (write the whole review file), \texttt{append\_bibliography} (write the bibliography for given identifiers) \\
+    \addlinespace
+    3 (1 macro-tool) & \texttt{conduct\_literature\_review}$^\ast$ (search, read, summarise and write the complete review from a single query) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\paragraph{Level 1 (micro-tools).} Every tool performs one small operation, so the agent must plan the whole chain: search, download each PDF, extract its text, split it, summarise the chunks, format the references and assemble the review by appending to the file. Four tools are not needed for the base task (Wikipedia search, keyword extraction, translation and Markdown tables); they act as distractors there and become useful in the variants with an added requirement. Level~1 can only append to files, so text already written to the review cannot be overwritten.
+
+\paragraph{Level 2 (medium tools).} One call of \texttt{get\_and\_summarize\_paper} downloads a paper, extracts and splits its text and summarises up to six chunks (up to six internal LLM calls); \texttt{write\_review} replaces the review file with the agent's text; and \texttt{append\_bibliography} writes an alphabetical APA bibliography after checking that every identifier exists on arXiv. The agent still chooses the papers and composes the review.
+
+\paragraph{Level 3 (macro-tool).} The single tool takes only a query. It retrieves $2N=10$ candidates, summarises them in order of relevance, skipping papers whose PDF cannot be read, until $N$ papers are summarised (up to 30 internal LLM calls), and writes the complete review with its bibliography. The workflow is fixed in code; the agent decides only the query.
+
+The levels also change the prompt: the JSON schemas of the tools take 4{,}707, 1{,}697 and 307 characters at Levels~1, 2 and~3. This prompt overhead is confounded with the level (Section~\ref{sec:variables}).
+
+\subsection{Models}
+\label{sec:models}
+
+We evaluate five open-weight, instruction-tuned models (Table~\ref{tab:models}), quantised where needed to fit the 16\,GB GPU. They form two comparisons that share the reference model Qwen3.5-9B, which is also the baseline model: a \emph{family} comparison of three models of similar size from different families, and a \emph{scale} comparison of three sizes within the Qwen3.5 family. Each model uses its own vLLM tool-call parser, and Gemma and Llama use dedicated tool chat templates; Llama is limited to one tool call per turn. All models share the sampling settings: temperature 0.7, a random seed per run that is recorded, at most 8{,}192 completion tokens, and the model's default top-$p$ and top-$k$. Parameter counts are nominal, and the quantisation differs within the scale series, which we treat as a limitation of that comparison.
+
+\begin{table}[t]
+  \caption{Models. All are served by vLLM~0.33.0 with a 32{,}768-token context window.}
+  \label{tab:models}
+  \centering
+  \small
+  \begin{tabular}{@{}llrll@{}}
+    \toprule
+    Model & Comparison & Params & Quantisation & Tool-call parser \\
+    \midrule
+    Qwen3.5-9B (baseline) & family, scale & 9B & AWQ 4-bit & \texttt{qwen3\_coder} \\
+    Gemma 4 12B IT & family & 12B & QAT W4A16 & \texttt{gemma4} \\
+    Llama 3.1 8B Instruct & family & 8B & AWQ INT4 & \texttt{llama3\_json} \\
+    Qwen3.5-4B & scale & 4B & FP8 (online) & \texttt{qwen3\_coder} \\
+    Qwen3.5-0.8B & scale & 0.8B & none (BF16) & \texttt{qwen3\_coder} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Memory, planning, verification and communication}
+\label{sec:mechanisms}
+
+\paragraph{Memory.} The agent has only short-term memory: the full message history of the run, without truncation or summarisation, bounded by the context window; nothing carries over between runs. The workspace serves as external working memory: tools exchange relative file paths (for example \texttt{papers/<id>.pdf} or \texttt{summaries/<id>.md}) instead of copying document text into the conversation, and reading a file returns at most 6{,}000 characters.
+
+\paragraph{Planning.} There is no separate planner. The plan emerges from the ReAct loop, guided by the requirement list of the task prompt and by the tool descriptions. At Level~2 part of the plan (fetch, extract, split, summarise) sits inside one tool, and at Level~3 the whole plan is fixed in the macro-tool.
+
+\paragraph{Verification.} Tool arguments are validated against schemas derived from the tool signatures, including value ranges (for example 1--10 search results), and lists passed as JSON strings are decoded. Tools check arXiv identifiers, the workspace sandbox, file types and sizes and the PDF format, and they report failures as messages the agent can act on; \texttt{append\_bibliography} also verifies that each identifier exists. There is no LLM-based self-critique, and the agent never sees the evaluator's verdict, which is computed only after the run ends.
+
+\paragraph{Communication.} The system has a single agent. LLM-backed tools call the same model on the same server with the same sampling settings and seed; their token usage is attributed to the tool and included in the cost of the run (Section~\ref{sec:cost}).
+
+\subsection{Outcome evaluation}
+\label{sec:evaluation}
+
+After the agent stops, a deterministic evaluator scores \texttt{reviews/review.md} with the ten binary checks of Table~\ref{tab:checks}. Checks that need facts about the cited papers (existence, title, first-version submission date) look them up on arXiv by identifier, through the cache; no LLM acts as a judge. The evaluator does not assess the quality or the topical relevance of the summaries. It verifies the structure, the references, the facts that can be checked mechanically and whether every cited paper was actually read.
+
+\begin{table}[t]
+  \caption{Binary checks applied to the review file. If the file is missing, all checks fail.}
+  \label{tab:checks}
+  \centering
+  \small
+  \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Check & Passes when \\
+    \midrule
+    \texttt{file\_exists} & \texttt{reviews/review.md} exists \\
+    \texttt{section\_count} & there are exactly $N$ paper sections (second-level headings other than the bibliography) \\
+    \texttt{summaries\_present} & every paper section contains at least 40 characters of text besides its reference \\
+    \texttt{citations\_apa} & every reference line matches the APA~7 pattern for arXiv preprints \\
+    \texttt{ids\_exist} & every cited arXiv identifier resolves to a paper \\
+    \texttt{dates\_in\_window} & the first version of every paper was submitted within the scenario window \\
+    \texttt{titles\_match} & the real title of every paper appears in its heading and in its reference \\
+    \texttt{bibliography\_matches} & the bibliography lists exactly the cited identifiers \\
+    \texttt{no\_duplicates} & no paper is cited twice \\
+    \texttt{papers\_read} & the run extracted the full text of every cited paper \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+A run is a \emph{success} if it completed---it neither hit the step limit nor failed---and passed all ten checks. Its \emph{score} is the fraction of passed checks; it is computed for every scored run, including runs that hit the step limit or failed, and gives partial credit. Runs with an infrastructure error are excluded from all metrics and repeated.
+
+\subsection{Cost measurement}
+\label{sec:cost}
+
+LangChain callbacks meter every run. For each LLM call they record the input and output tokens reported by the server and attribute the call to the agent loop or, if it was issued inside a tool, to that tool; they also count tool calls and tool errors. Tool-internal calls are essential for a fair comparison: at Level~3 almost all LLM work happens inside the macro-tool, so counting only the agent's own calls would make coarse tools look cheap. For the main experiment the meter also records (i) the time spent in LLM calls, separately for the agent and for tools, and the remaining tool time, which is dominated by network access; (ii) the input tokens of the first agent call, which measure the prompt overhead of a level; and (iii) malformed tool calls, such as unparseable arguments or unknown tool names, which never start a tool run and therefore go uncounted so far. Wall-clock time also includes arXiv throttling and the scoring of the review, so we report it only as an indication. Every run is traced in MLflow with its parameters, metrics, review file and per-check assessments.
