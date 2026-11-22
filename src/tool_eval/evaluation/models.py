@@ -140,9 +140,15 @@ class Judgment(BaseModel):
 
     @property
     def passes(self) -> bool | None:
-        """Every rating at least `JUDGE_PASS`; `None` when a rating is missing."""
+        """Every rating at least `JUDGE_PASS`; `None` when a rating is missing.
+
+        A judged review without any paper section whose summary could be rated (for example a
+        file written as one line with literal newline escapes) does not pass.
+        """
+        if self.valid_review is not None and self.relevance is not None and not self.faithfulness:
+            return False
         ratings = [self.valid_review, self.relevance, *self.faithfulness]
-        if not self.faithfulness or any(r is None for r in ratings):
+        if any(r is None for r in ratings):
             return None
         return all(r is not None and r >= JUDGE_PASS for r in ratings)
 

@@ -67,9 +67,27 @@
 
 ## 7. Verification
 
-- [ ] 7.1 `make test`, ruff and mypy clean.
-- [ ] 7.2 Rescore the screen results in `results/old/screen-1121/` on the RTX and judge them with a served `qwen`. Check two things:
+- [x] 7.1 `make test`, ruff and mypy clean.
+- [x] 7.2 Rescore the screen results in `results/old/screen-1121/` on the RTX and judge them with a served `qwen`. Check two things:
   - the off-topic `qwen-weak level3-diffusion` run is not artifact valid;
   - llama's `###`-heading reviews pass the fact checks.
 
   Record the outcome in this file.
+
+Notes on 7.2 (2026-11-22). At the user's request this ran locally on the Mac with qwen-mid as the judge, not on the RTX with qwen. The RTX was freed after the variant smoke run.
+- **Structured output:** works on vllm-metal (`json_schema` guided decoding). One judgment takes about 4 s.
+- **Screen edge cases** (copied from `results/old/screen-1121` on the RTX):
+  - The off-topic qwen-weak `level3-diffusion` review ("arXiv 2310"), format score 1.0, got relevance 1, so it is not artifact valid.
+  - llama `level2-timeseries` (`###` headings, format score 0.1) passes the fact checks and gets 5/5/5, so it is artifact valid. Under the old rule this was a false negative.
+  - llama `level1-rlhf` (placeholders and invented ids) fails the fact checks and gets 1/1/1.
+  - llama `level2-diffusion` is a one-line file with literal `\n` escapes. Its fact checks pass, but no paper section can be rated, so it now counts as not valid. `Judgment.passes` was changed for this case.
+- **Variant smoke (RTX runs, judged locally):**
+
+  | level | success | format success |
+  |---|---|---|
+  | L1 | 2/3 | 2/3 |
+  | L2 | 3/3 | 3/3 |
+  | L3 | 1/3 | 3/3 |
+
+  L3 fails `table` and `polish` and passes `no_surveys`. No cited paper was judged a survey.
+- **Base smoke (Mac):** 9 of 9 judged runs are artifact valid. The judge (qwen-mid) is lenient: nearly every rating is 5.

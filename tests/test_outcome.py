@@ -240,3 +240,8 @@ def test_old_records_have_undecided_validity() -> None:
     record = _record("level1", "a", 1, score=1.0, tokens=1)
     assert record.artifact_valid(_judgment()) is None
     assert record.format_success
+
+
+def test_review_without_rateable_sections_is_not_valid() -> None:
+    record = _with_outcome(_record("level2", "a", 1, score=0.1, tokens=1))
+    assert record.artifact_valid(_judgment(faithfulness=[])) is False
