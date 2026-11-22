@@ -11,7 +11,10 @@ from tool_eval.tools import level1, level2, level3
 # config hash, so runs made with different tool definitions are never treated as comparable.
 # 2: level 2 writes the review with write_review (overwrite) instead of append_to_review.
 # 3: level 3 fills the review with read papers from spare candidates and reports skips.
-TOOLSET_VERSION = 3
+# 4: level 1 writes with write_file (overwrite); level 2/3 synthesize one summary per paper;
+#    level 3 states completion and starts each call from a clean workspace; cut text is marked;
+#    summarize_chunk accepts one chunk at most.
+TOOLSET_VERSION = 4
 
 TOOLSETS: Mapping[str, Sequence[BaseTool]] = {
     "level1": level1.TOOLS,

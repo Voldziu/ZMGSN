@@ -1,8 +1,14 @@
+import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+
+from test_evaluation import _record
+from tool_eval.evaluation.report import render_markdown
 
 SERVER_DIR = Path(__file__).resolve().parents[1] / "src" / "tool_eval" / "server"
 PRESET_NAMES = {"qwen", "gemma", "llama", "qwen-mid", "qwen-weak"}
@@ -67,3 +73,18 @@ def test_preset_lists_match_preset_files() -> None:
     script_line = next(line for line in script.splitlines() if line.startswith("ALL_PRESETS="))
     assert set(make_line.split(":=", 1)[1].split()) == PRESET_NAMES
     assert set(script_line.split("=", 1)[1].strip('"').split()) == PRESET_NAMES
+
+
+@pytest.mark.skipif(shutil.which("awk") is None, reason="needs awk")
+def test_eval_presets_prints_the_quality_table() -> None:
+    script = (SERVER_DIR / "eval-presets.sh").read_text(encoding="utf-8")
+    [program] = re.findall(r"tool_eval\.main report \"\$out\" \| awk '([^']+)'", script)
+    report = render_markdown([_record("level1", "a", 1, score=1.0, tokens=100)])
+    printed = subprocess.run(
+        ["awk", program], input=report, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    headings = [line for line in printed if line.startswith("#")]
+    assert headings == ["## Outcomes [95% Wilson interval]", "## Quality (format checks)"]
+    quality = printed[printed.index("## Quality (format checks)") :]
+    assert quality[2].startswith("| model | level | runs | successes | success | 95% CI |")
+    assert "| m | level1 | 1 | 1 | 100% | 21–100% |" in quality[4]

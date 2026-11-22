@@ -8,5 +8,15 @@
   {"id": "protein-2022h2", "topic": "protein structure prediction", "date_from": "2022-07-01", "date_to": "2023-06-30"},
   {"id": "timeseries-2023", "topic": "time series forecasting transformers", "date_from": "2023-01-01", "date_to": "2023-12-31"},
   {"id": "hallucination-2024", "topic": "large language model hallucination", "date_from": "2024-01-01", "date_to": "2024-12-31"},
-  {"id": "xai-2022", "topic": "explainable artificial intelligence", "date_from": "2022-01-01", "date_to": "2022-12-31"}
+  {"id": "xai-2022", "topic": "explainable artificial intelligence", "date_from": "2022-01-01", "date_to": "2022-12-31"},
+  {"id": "rag-2024h1-table", "topic": "retrieval augmented generation", "date_from": "2024-01-01", "date_to": "2024-06-30", "requirement": "table", "base": "rag-2024h1"},
+  {"id": "gnn-2023h1-polish", "topic": "graph neural networks", "date_from": "2023-01-01", "date_to": "2023-06-30", "requirement": "polish", "base": "gnn-2023h1"},
+  {"id": "diffusion-2023h2-no_surveys", "topic": "diffusion models image generation", "date_from": "2023-07-01", "date_to": "2023-12-31", "requirement": "no_surveys", "base": "diffusion-2023h2"},
+  {"id": "rlhf-2024-table", "topic": "reinforcement learning from human feedback", "date_from": "2024-01-01", "date_to": "2024-12-31", "requirement": "table", "base": "rlhf-2024"},
+  {"id": "federated-2022-polish", "topic": "federated learning privacy", "date_from": "2022-01-01", "date_to": "2022-12-31", "requirement": "polish", "base": "federated-2022"},
+  {"id": "qec-2023-no_surveys", "topic": "quantum error correction", "date_from": "2023-01-01", "date_to": "2023-12-31", "requirement": "no_surveys", "base": "qec-2023"},
+  {"id": "protein-2022h2-table", "topic": "protein structure prediction", "date_from": "2022-07-01", "date_to": "2023-06-30", "requirement": "table", "base": "protein-2022h2"},
+  {"id": "timeseries-2023-polish", "topic": "time series forecasting transformers", "date_from": "2023-01-01", "date_to": "2023-12-31", "requirement": "polish", "base": "timeseries-2023"},
+  {"id": "hallucination-2024-no_surveys", "topic": "large language model hallucination", "date_from": "2024-01-01", "date_to": "2024-12-31", "requirement": "no_surveys", "base": "hallucination-2024"},
+  {"id": "xai-2022-table", "topic": "explainable artificial intelligence", "date_from": "2022-01-01", "date_to": "2022-12-31", "requirement": "table", "base": "xai-2022"}
 ]

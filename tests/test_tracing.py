@@ -1,17 +1,25 @@
+import functools
 import sys
 import types
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
+from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration, LLMResult
+from langgraph.errors import GraphRecursionError
 
 from test_evaluation import SCENARIO, _lookup, _papers, _review_text, _settings, _write_review
+from test_metering import _Clock
 from tool_eval.evaluation import runner, tracing
+from tool_eval.evaluation.cost import RunMeter
 from tool_eval.evaluation.report import load_records
 from tool_eval.exceptions import TrackingServerError
 from tool_eval.main import main
+from tool_eval.utils.logger import close_logging, configure_logging
 
 
 class _FakeSpan:
@@ -170,17 +178,16 @@ def test_each_run_is_an_mlflow_run_with_one_trace(
     assert fake_mlflow.named("set_tracking_uri") == ["http://localhost:5050"]
     assert fake_mlflow.named("set_experiment") == ["tool-eval"]
     assert fake_mlflow.named("autolog") == [{"silent": True}]
-    assert fake_mlflow.named("start_run") == ["qwen/level1-demo-01", "qwen/level3-demo-01"]
-    assert fake_mlflow.named("start_span") == [
-        ("level1-demo-01", "AGENT"),
-        ("level3-demo-01", "AGENT"),
-    ]
+    # Records are in execution order, which is the randomised block order.
+    assert sorted(r.run_id for r in records) == ["level1-demo-01", "level3-demo-01"]
+    assert fake_mlflow.named("start_run") == [f"qwen/{r.run_id}" for r in records]
+    assert fake_mlflow.named("start_span") == [(r.run_id, "AGENT") for r in records]
 
     params = fake_mlflow.named("log_params")[0]
     assert {"model", "level", "scenario", "repeat", "seed", "max_steps", "config_sha256"} <= set(
         params
     )
-    assert params["level"] == "level1"
+    assert params["level"] == records[0].level
     metrics = fake_mlflow.named("log_metrics")[0]
     assert metrics["score"] == 1.0
     assert metrics["success"] == 1.0
@@ -188,7 +195,7 @@ def test_each_run_is_an_mlflow_run_with_one_trace(
     assert fake_mlflow.named("set_tags")[0]["status"] == "completed"
 
     trace_updates = fake_mlflow.named("update_current_trace")
-    assert trace_updates[0]["tags"]["level"] == "level1"
+    assert trace_updates[0]["tags"]["level"] == records[0].level
     assert trace_updates[0]["session_id"] == "qwen/demo"
     assert fake_mlflow.spans[0].outputs["status"] == "completed"
 
@@ -276,3 +283,106 @@ def test_failed_run_creation_falls_back_to_untraced(
     records = load_records(_evaluate(tmp_path))
     assert [r.status for r in records] == ["completed", "completed"]
     assert [(r.mlflow_run_id, r.trace_id) for r in records] == [(None, None), (None, None)]
+
+
+def test_metrics_carry_time_prompt_overhead_and_totals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_mlflow: _FakeMlflow
+) -> None:
+    from tool_eval.config import get_settings
+
+    def run_task(agent: Any, task: str, *, callbacks: list[Any], **kwargs: Any) -> list[Any]:
+        meter = next(c for c in callbacks if isinstance(c, RunMeter))
+        call = uuid4()
+        meter.on_chat_model_start({}, [[]], run_id=call)
+        usage = {"input_tokens": 1200, "output_tokens": 30, "total_tokens": 1230}
+        reply = AIMessage("done", usage_metadata=usage)
+        meter.on_llm_end(LLMResult(generations=[[ChatGeneration(message=reply)]]), run_id=call)
+        _write_review(get_settings().workspace_dir, _review_text())
+        return []
+
+    monkeypatch.setattr(runner, "build_agent", lambda level, *, settings=None: object())
+    monkeypatch.setattr(runner, "run_task", run_task)
+    records = load_records(_evaluate(tmp_path))
+
+    logged = fake_mlflow.named("log_metrics")
+    assert len(logged) == 2
+    for metrics in logged:
+        assert metrics["first_call_input_tokens"] == 1200
+        assert metrics["total_tokens"] == 1230
+        assert {
+            "agent_llm_seconds",
+            "tool_llm_seconds",
+            "tool_seconds",
+            "tool_other_seconds",
+            "llm_calls",
+            "malformed_tool_calls",
+            "wall_seconds",
+        } <= set(metrics)
+        assert all(isinstance(value, float) for value in metrics.values())
+    params = fake_mlflow.named("log_params")
+    assert [p["block_position"] for p in params] == [r.block_position for r in records]
+    assert {p["order_seed"] for p in params} == {records[0].order_seed}
+    assert isinstance(records[0].order_seed, int)
+
+
+def test_step_limit_run_logs_its_score_but_no_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_mlflow: _FakeMlflow
+) -> None:
+    from tool_eval.config import get_settings
+
+    def run_task(agent: Any, task: str, **kwargs: Any) -> list[Any]:
+        _write_review(get_settings().workspace_dir, _review_text())
+        raise GraphRecursionError
+
+    monkeypatch.setattr(runner, "build_agent", lambda level, *, settings=None: object())
+    monkeypatch.setattr(runner, "run_task", run_task)
+    records = load_records(_evaluate(tmp_path))
+    assert {r.status for r in records} == {"step_limit"}
+    for metrics in fake_mlflow.named("log_metrics"):
+        assert (metrics["success"], metrics["score"]) == (0.0, 1.0)
+
+
+def test_wall_time_excludes_opening_the_mlflow_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_mlflow: _FakeMlflow
+) -> None:
+    from tool_eval.config import get_settings
+
+    clock = _Clock()
+    monkeypatch.setattr(runner, "RunMeter", functools.partial(RunMeter, clock=clock))
+    real_start_run = fake_mlflow.start_run
+
+    @contextmanager
+    def slow_start_run(run_name: str) -> Iterator[Any]:
+        clock.advance(10)  # a slow tracking server
+        with real_start_run(run_name) as run:
+            yield run
+
+    def run_task(agent: Any, task: str, **kwargs: Any) -> list[Any]:
+        clock.advance(5)
+        _write_review(get_settings().workspace_dir, _review_text())
+        return []
+
+    monkeypatch.setattr(fake_mlflow, "start_run", slow_start_run)
+    monkeypatch.setattr(runner, "build_agent", lambda level, *, settings=None: object())
+    monkeypatch.setattr(runner, "run_task", run_task)
+    records = load_records(_evaluate(tmp_path))
+    assert [r.cost.wall_seconds for r in records] == [5, 5]
+
+
+def test_mlflow_warnings_carry_the_run_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_mlflow: _FakeMlflow
+) -> None:
+    def broken_metrics(metrics: dict[str, float]) -> None:
+        raise ConnectionError("tracking server went away")
+
+    monkeypatch.setattr(fake_mlflow, "log_metrics", broken_metrics)
+    _patch_agent(monkeypatch)
+    log_file = tmp_path / "eval.log"
+    configure_logging(log_file)
+    try:
+        _evaluate(tmp_path)
+    finally:
+        close_logging()
+    text = log_file.read_text(encoding="utf-8")
+    for run_id in ("level1-demo-01", "level3-demo-01"):
+        assert f"[{run_id}] MLflow: could not log the results of {run_id}" in text

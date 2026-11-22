@@ -11,10 +11,6 @@ from typing import Self
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Served model names whose chat template rejects several tool calls in one assistant message
-# (the Llama 3.1 template raises "This model only supports single tool-calls at once!").
-SINGLE_TOOL_CALL_PRESETS = frozenset({"llama"})
-
 
 class Settings(BaseSettings):
     """Validated configuration for the LLM, the agent and the research tools."""
@@ -33,15 +29,24 @@ class Settings(BaseSettings):
     # for long prompts within the 32k context.
     llm_max_tokens: int = Field(default=8192, ge=1)
     llm_enable_thinking: bool = False
-    # Unset: preset default (see SINGLE_TOOL_CALL_PRESETS). False asks for one tool call per reply.
+    # One tool call per reply for every model by default (the Llama 3.1 template cannot render
+    # more, and one policy keeps call counts comparable). True allows parallel calls.
     llm_parallel_tool_calls: bool | None = None
+    # Sampling sent explicitly with every request, identical for every model, so no model samples
+    # with defaults from its own generation config.
+    llm_top_p: float = Field(default=0.95, gt=0.0, le=1.0)
+    llm_top_k: int = Field(default=20, ge=-1)
     # Sampling seed sent with every request; the evaluation runner draws a fresh one per run.
     llm_seed: int | None = None
 
     # One-tool-per-turn models need up to ~33 calls for a five-paper review; 100 leaves room.
     agent_max_steps: int = Field(default=100, ge=1)
-    agent_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
-    prompt_version: str = "v2"
+    # Loop guard: stop a run when the agent requests the same tool call this many times in a
+    # row, or when this many tool calls in a row fail. 0 switches a check off.
+    agent_max_repeated_calls: int = Field(default=8, ge=0)
+    agent_max_tool_error_streak: int = Field(default=10, ge=0)
+    agent_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    prompt_version: str = "v3"
 
     # Inclusive submission-date window for arXiv searches; keeps runs reproducible.
     arxiv_date_from: date | None = None
@@ -63,16 +68,14 @@ class Settings(BaseSettings):
     review_paper_count: int = Field(default=5, ge=1, le=10)
 
     @property
-    def effective_parallel_tool_calls(self) -> bool | None:
+    def effective_parallel_tool_calls(self) -> bool:
         """Parallel-tool-call policy sent to the server.
 
         Returns:
-            `False` to ask for one tool call per reply, `True` to allow several, `None` to leave
-            it to the server's default.
+            `False` (the default for every model) to ask for one tool call per reply, `True` to
+            allow several.
         """
-        if self.llm_parallel_tool_calls is not None:
-            return self.llm_parallel_tool_calls
-        return False if self.llm_model in SINGLE_TOOL_CALL_PRESETS else None
+        return False if self.llm_parallel_tool_calls is None else self.llm_parallel_tool_calls
 
     @model_validator(mode="after")
     def _check_date_window(self) -> Self:

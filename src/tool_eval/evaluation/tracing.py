@@ -153,11 +153,21 @@ class RunTrace:
         mlflow = self._mlflow
         assert mlflow is not None
         outcome = record.outcome
+        cost = record.cost
+        measured = {
+            **cost.model_dump(exclude={"chars_read"}),
+            "chars_read_total": sum(cost.chars_read.values()) if cost.chars_read else None,
+            "total_tokens": cost.total_tokens,
+            "llm_calls": cost.llm_calls,
+            "malformed_tool_calls": cost.malformed_tool_calls,
+            "tool_other_seconds": cost.tool_other_seconds,
+        }
         mlflow.log_metrics(
             {
-                **{key: float(value) for key, value in record.cost.model_dump().items()},
+                # Unknown measurements (None) are left out: MLflow metrics must be numbers.
+                **{key: float(value) for key, value in measured.items() if value is not None},
                 "score": outcome.score if outcome else 0.0,
-                "success": 1.0 if outcome and outcome.success else 0.0,
+                "success": 1.0 if record.success else 0.0,
             }
         )
         mlflow.set_tags({"status": record.status, "error": (record.error or "")[:_MAX_TAG_CHARS]})

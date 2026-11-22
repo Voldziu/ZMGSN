@@ -1,4 +1,6 @@
+import json
 import re
+from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -14,6 +16,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langgraph.errors import GraphRecursionError
 
+import tool_eval.main as cli
 from tool_eval.config import Settings, get_settings, use_settings
 from tool_eval.evaluation import runner
 from tool_eval.evaluation.checks import CHECKS_VERSION, evaluate_review
@@ -29,6 +32,7 @@ from tool_eval.evaluation.models import (
 from tool_eval.evaluation.report import load_records, render_markdown, summarize
 from tool_eval.evaluation.runner import run_evaluation
 from tool_eval.evaluation.scenarios import load_scenarios
+from tool_eval.evaluation.server_identity import ServerIdentity
 from tool_eval.exceptions import ExternalServiceError, InvalidInputError
 from tool_eval.llm import get_chat_model
 from tool_eval.main import main
@@ -36,7 +40,7 @@ from tool_eval.prompts import load_prompt
 from tool_eval.services import reports
 from tool_eval.services.arxiv import ArxivPaper
 from tool_eval.services.papers import PaperSummary, split_paper_text
-from tool_eval.tools.registry import TOOLSET_VERSION, get_tools
+from tool_eval.tools.registry import TOOLSET_VERSION, TOOLSETS, get_tools
 
 SCENARIO = Scenario(
     id="demo",
@@ -111,8 +115,59 @@ def _mark_read(workspace: Path, arxiv_ids: Sequence[str]) -> None:
 
 def test_shipped_scenarios_are_valid() -> None:
     scenarios = load_scenarios(Path(__file__).parent.parent / "scenarios" / "scenarios.json")
-    assert len(scenarios) == 10
-    assert len({s.id for s in scenarios}) == 10
+    assert len(scenarios) == 20
+    assert len({s.id for s in scenarios}) == 20
+    bases = [s for s in scenarios if s.task_type == "base"]
+    variants = {s.base_id: s for s in scenarios if s.task_type == "variant"}
+    assert len(bases) == len(variants) == 10
+    # Requirements in turn over the base scenarios in file order: 4 / 3 / 3.
+    rotation = ["table", "polish", "no_surveys"]
+    assert [variants[b.id].requirement for b in bases] == [rotation[i % 3] for i in range(10)]
+    assert variants[bases[0].id].id == "rag-2024h1-table"
+
+
+def _scenario_file(tmp_path: Path, *entries: str) -> Path:
+    path = tmp_path / "s.json"
+    path.write_text("[" + ", ".join(entries) + "]", encoding="utf-8")
+    return path
+
+
+BASE_A = '{"id": "a", "topic": "topic", "date_from": "2024-01-01", "date_to": "2024-02-01"}'
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        # base does not exist
+        '{"id": "b-table", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "table", "base": "b"}',
+        # window differs from its base
+        '{"id": "a-table", "topic": "topic", "date_from": "2024-01-02", '
+        '"date_to": "2024-02-01", "requirement": "table", "base": "a"}',
+        # id not <base>-<requirement>
+        '{"id": "a-tab", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "table", "base": "a"}',
+        # requirement without base
+        '{"id": "a-table", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "table"}',
+    ],
+)
+def test_invalid_variants_are_rejected(tmp_path: Path, variant: str) -> None:
+    with pytest.raises(InvalidInputError):
+        load_scenarios(_scenario_file(tmp_path, BASE_A, variant))
+
+
+def test_variant_of_a_variant_is_rejected(tmp_path: Path) -> None:
+    variant = (
+        '{"id": "a-table", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "table", "base": "a"}'
+    )
+    nested = (
+        '{"id": "a-table-polish", "topic": "topic", "date_from": "2024-01-01", '
+        '"date_to": "2024-02-01", "requirement": "polish", "base": "a-table"}'
+    )
+    with pytest.raises(InvalidInputError, match="a-table-polish"):
+        load_scenarios(_scenario_file(tmp_path, BASE_A, variant, nested))
 
 
 def test_scenarios_reject_duplicate_ids_and_bad_windows(tmp_path: Path) -> None:
@@ -276,7 +331,7 @@ def test_override_and_nested_llm_calls_reach_tools_in_agent_loop(tmp_path: Path)
         ),
     )
     agent = create_agent(model=outer, tools=[probe])
-    meter = RunMeter()
+    meter = RunMeter(tool_names={"probe"})
     with use_settings(_settings(tmp_path / "marker-ws")):
         config: RunnableConfig = {"callbacks": [meter]}
         result = agent.invoke({"messages": [HumanMessage("go")]}, config=config)
@@ -289,6 +344,14 @@ def test_override_and_nested_llm_calls_reach_tools_in_agent_loop(tmp_path: Path)
     assert (cost.agent_input_tokens, cost.agent_output_tokens) == (250, 25)
     assert (cost.tool_input_tokens, cost.tool_output_tokens) == (7, 3)
     assert cost.total_tokens == 285
+    assert cost.first_call_input_tokens == 100
+    assert cost.malformed_tool_calls == 0
+    assert cost.agent_llm_seconds is not None
+    assert cost.tool_llm_seconds is not None
+    assert cost.tool_seconds is not None
+    assert min(cost.agent_llm_seconds, cost.tool_llm_seconds) >= 0
+    assert cost.tool_seconds >= cost.tool_llm_seconds
+    assert cost.wall_seconds >= cost.agent_llm_seconds
 
 
 def test_level3_review_passes_outcome_checks(
@@ -363,8 +426,8 @@ def test_runner_records_isolated_runs_and_resumes(
     assert executed == 2
 
     records = load_records(output)
-    assert [r.run_id for r in records] == ["level1-demo-01", "level3-demo-01"]
-    assert all(r.status == "completed" and r.outcome and r.outcome.success for r in records)
+    assert sorted(r.run_id for r in records) == ["level1-demo-01", "level3-demo-01"]
+    assert all(r.status == "completed" and r.success for r in records)
     assert records[0].temperature == 0.7
     assert len(records[0].system_prompt_sha256) == 64
     assert len(records[0].task_prompt_sha256) == 64
@@ -433,6 +496,281 @@ def test_arxiv_failure_during_checks_is_an_error_run(
 
     _, output = _run(tmp_path, lookup=broken_lookup)
     assert {r.status for r in load_records(output)} == {"error"}
+
+
+def test_scoring_is_retried_without_rerunning_the_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _no_scoring_waits: list[float]
+) -> None:
+    agent_runs: list[int] = []
+
+    def agent() -> None:
+        agent_runs.append(1)
+        _write_review(get_settings().workspace_dir, _review_text())
+
+    _patch_agent(monkeypatch, agent)
+    working = _lookup(_papers())
+    calls: list[int] = []
+
+    def flaky_lookup(ids: Sequence[str]) -> Mapping[str, Any]:
+        calls.append(1)
+        if len(calls) <= 2:
+            raise ExternalServiceError("arXiv answered 429")
+        return working(ids)
+
+    _, output = _run(tmp_path, lookup=flaky_lookup)
+    records = load_records(output)
+    # Two runs (levels 1 and 3); only the first one's scoring hits the outage.
+    assert [r.status for r in records] == ["completed", "completed"]
+    assert all(r.outcome is not None for r in records)
+    assert len(agent_runs) == 2
+    assert _no_scoring_waits == [60, 180]
+
+
+def test_persistent_scoring_outage_is_an_error_and_reported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    _no_scoring_waits: list[float],
+) -> None:
+    _patch_agent(monkeypatch, lambda: _write_review(get_settings().workspace_dir, _review_text()))
+
+    def broken_lookup(ids: Sequence[str]) -> Mapping[str, Any]:
+        raise ExternalServiceError("arXiv down")
+
+    with caplog.at_level("WARNING"):
+        _, output = _run(tmp_path, lookup=broken_lookup)
+    assert {r.status for r in load_records(output)} == {"error"}
+    assert _no_scoring_waits == [60, 180, 600] * 2
+    assert "2 planned runs have no scored record" in caplog.text
+
+
+LEVELS = ["level1", "level2", "level3"]
+# block_order(LEVELS, seed=7, repeat=1, scenario_id="demo"), fixed when the order was introduced.
+GOLDEN_ORDER = ["level1", "level3", "level2"]
+
+
+def test_block_order_is_a_reproducible_permutation() -> None:
+    order = runner.block_order(LEVELS, seed=7, repeat=1, scenario_id="demo")
+    assert sorted(order) == LEVELS
+    # Only the set of levels matters, not how they were listed.
+    assert runner.block_order(LEVELS[::-1], seed=7, repeat=1, scenario_id="demo") == order
+    assert runner.block_order([*LEVELS, "level1"], seed=7, repeat=1, scenario_id="demo") == order
+    # A recorded seed must keep reproducing the orders it planned.
+    assert order == GOLDEN_ORDER
+    orders = {
+        tuple(runner.block_order(LEVELS, seed=7, repeat=1, scenario_id=f"s{i}")) for i in range(10)
+    }
+    assert len(orders) > 1
+
+
+def _run_levels(
+    tmp_path: Path,
+    *,
+    repeats: int,
+    order_seed: int | None,
+    name: str = "results.jsonl",
+    levels: Sequence[str] = tuple(LEVELS),
+) -> list[RunRecord]:
+    output = tmp_path / name
+    run_evaluation(
+        scenarios=[SCENARIO, SCENARIO.model_copy(update={"id": "demo2"})],
+        levels=levels,
+        repeats=repeats,
+        output=output,
+        runs_dir=tmp_path / "runs",
+        settings=_settings(tmp_path / "unused"),
+        lookup=_lookup(_papers()),
+        order_seed=order_seed,
+    )
+    return load_records(output)
+
+
+def _blocks(records: Sequence[RunRecord]) -> dict[tuple[int, str], list[RunRecord]]:
+    blocks: dict[tuple[int, str], list[RunRecord]] = defaultdict(list)
+    for record in records:
+        blocks[record.repeat, record.scenario_id].append(record)
+    return blocks
+
+
+def _assert_block_order(records: Sequence[RunRecord], seed: int) -> None:
+    for (repeat, scenario_id), block in _blocks(records).items():
+        expected = runner.block_order(LEVELS, seed=seed, repeat=repeat, scenario_id=scenario_id)
+        assert [r.level for r in block] == expected
+        assert [r.block_position for r in block] == [1, 2, 3]
+
+
+def test_levels_run_in_the_recorded_block_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_agent(monkeypatch, lambda: _write_review(get_settings().workspace_dir, _review_text()))
+    records = _run_levels(tmp_path, repeats=2, order_seed=7)
+    assert len(records) == 12
+    assert {r.order_seed for r in records} == {7}
+    # Repeat 1 finishes everywhere before repeat 2 starts.
+    assert [r.repeat for r in records] == [1] * 6 + [2] * 6
+    _assert_block_order(records, seed=7)
+
+
+def test_resumed_evaluation_keeps_its_order_seed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_agent(monkeypatch, lambda: _write_review(get_settings().workspace_dir, _review_text()))
+    _run_levels(tmp_path, repeats=1, order_seed=7)
+    records = _run_levels(tmp_path, repeats=2, order_seed=None)
+    assert len(records) == 12
+    assert {r.order_seed for r in records} == {7}
+    _assert_block_order(records, seed=7)
+
+
+def test_new_results_file_draws_an_order_seed_outside_the_config_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_agent(monkeypatch, lambda: _write_review(get_settings().workspace_dir, _review_text()))
+    drawn = _run_levels(tmp_path, repeats=1, order_seed=None, name="a.jsonl")
+    [seed] = {r.order_seed for r in drawn}
+    assert isinstance(seed, int)
+    _assert_block_order(drawn, seed=seed)
+    other = _run_levels(tmp_path, repeats=1, order_seed=seed + 1, name="b.jsonl")
+    assert {r.config_sha256 for r in drawn} == {r.config_sha256 for r in other}
+
+
+def test_resuming_with_more_levels_keeps_positions_unique(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_agent(monkeypatch, lambda: _write_review(get_settings().workspace_dir, _review_text()))
+    _run_levels(tmp_path, repeats=1, order_seed=7, levels=["level1"])
+    records = _run_levels(tmp_path, repeats=1, order_seed=None)
+    assert len(records) == 6
+    for (repeat, scenario_id), block in _blocks(records).items():
+        plan = runner.block_order(list(TOOLSETS), seed=7, repeat=repeat, scenario_id=scenario_id)
+        assert sorted(r.block_position or 0 for r in block) == [1, 2, 3]
+        assert all(plan[(r.block_position or 0) - 1] == r.level for r in block)
+
+
+def test_a_subset_of_levels_keeps_its_planned_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_agent(monkeypatch, lambda: _write_review(get_settings().workspace_dir, _review_text()))
+    records = _run_levels(tmp_path, repeats=2, order_seed=7, levels=["level3", "level1"])
+    assert len(records) == 8
+    for (repeat, scenario_id), block in _blocks(records).items():
+        plan = runner.block_order(list(TOOLSETS), seed=7, repeat=repeat, scenario_id=scenario_id)
+        assert [r.level for r in block] == [level for level in plan if level != "level2"]
+        assert [r.block_position for r in block] == [plan.index(r.level) + 1 for r in block]
+
+
+def test_retried_run_keeps_its_planned_position(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    server = {"up_for_level2": False}
+
+    def run_task(agent: Any, task: str, *, metadata: Mapping[str, Any], **kwargs: Any) -> list[Any]:
+        if metadata["level"] == "level2" and not server["up_for_level2"]:
+            raise ConnectionError("vLLM server unreachable")
+        _write_review(get_settings().workspace_dir, _review_text())
+        return []
+
+    monkeypatch.setattr(runner, "build_agent", lambda level, *, settings=None: object())
+    monkeypatch.setattr(runner, "run_task", run_task)
+    _run_levels(tmp_path, repeats=1, order_seed=7)
+    server["up_for_level2"] = True
+    records = _run_levels(tmp_path, repeats=1, order_seed=None)
+
+    errors = [r for r in records if r.status == "error"]
+    assert len(errors) == 2
+    for error in errors:
+        block = _blocks(records)[error.repeat, error.scenario_id]
+        [retry] = [r for r in block if r.level == "level2" and r.status == "completed"]
+        assert retry.block_position == error.block_position
+        # The start time shows that the retry ran after the rest of its block.
+        assert retry.started_at == max(r.started_at for r in block)
+
+
+def test_cli_passes_the_order_seed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+    seen: dict[str, Any] = {}
+
+    def fake_run_evaluation(**kwargs: Any) -> int:
+        seen.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "run_evaluation", fake_run_evaluation)
+    scenarios = tmp_path / "scenarios.json"
+    scenarios.write_text(
+        '[{"id": "demo", "topic": "demo topic", "date_from": "2024-01-01",'
+        ' "date_to": "2024-06-30"}]',
+        encoding="utf-8",
+    )
+    assert main(["run", "--scenarios", str(scenarios), "--order-seed", "7"]) == 0
+    assert seen["order_seed"] == 7
+    assert main(["run", "--scenarios", str(scenarios)]) == 0
+    assert seen["order_seed"] is None
+
+
+# --- success rule ---------------------------------------------------------------
+
+
+def _outcome(passed: int, total: int = 10) -> OutcomeScore:
+    return OutcomeScore.from_criteria(
+        [CriterionResult(name=f"check{i}", passed=i < passed) for i in range(total)]
+    )
+
+
+@pytest.mark.parametrize(
+    ("status", "passed", "success", "score"),
+    [
+        ("completed", 10, True, 1.0),
+        ("completed", 9, False, 0.9),
+        ("step_limit", 10, False, 1.0),
+        ("failed", 6, False, 0.6),
+    ],
+)
+def test_only_completed_runs_that_pass_every_check_succeed(
+    status: RunStatus, passed: int, success: bool, score: float
+) -> None:
+    record = _record("level1", "a", 1, score=0.0, tokens=0).model_copy(
+        update={"status": status, "outcome": _outcome(passed)}
+    )
+    assert record.success is success
+    assert record.outcome is not None
+    assert record.outcome.score == pytest.approx(score)
+
+
+def test_success_is_written_but_recomputed_on_read() -> None:
+    record = _record("level1", "a", 1, score=1.0, tokens=10)
+    assert json.loads(record.model_dump_json())["success"] is True
+
+    # A line written before the rule: no top-level `success`, every check passed.
+    limited = _record("level1", "a", 1, score=1.0, tokens=10, status="step_limit")
+    old = json.loads(limited.model_dump_json())
+    del old["success"]
+    assert old["outcome"]["success"] is True
+    assert RunRecord.model_validate(old).success is False
+    # A stored value never overrides the rule.
+    assert RunRecord.model_validate({**old, "success": True}).success is False
+
+
+def test_step_limit_after_a_complete_review_is_not_a_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def review_then_loop() -> None:
+        _write_review(get_settings().workspace_dir, _review_text())
+        raise GraphRecursionError
+
+    _patch_agent(monkeypatch, review_then_loop)
+    _, output = _run(tmp_path)
+    records = load_records(output)
+    assert {r.status for r in records} == {"step_limit"}
+    for record in records:
+        assert record.outcome is not None
+        assert record.outcome.success
+        assert record.outcome.score == 1.0
+        assert not record.success
+    assert all(not json.loads(line)["success"] for line in output.read_text().splitlines())
+    [level1, _] = summarize(records)
+    assert level1.success_rate == 0.0
+    assert level1.mean_score == 1.0
 
 
 # --- report ---------------------------------------------------------------------
@@ -527,7 +865,7 @@ def test_cli_report_prints_and_rejects_missing_file(
 
 def test_every_level_can_search_summarize_and_write() -> None:
     required = {
-        "level1": {"search_arxiv", "summarize_chunk", "append_to_file"},
+        "level1": {"search_arxiv", "summarize_chunk", "write_file"},
         "level2": {"search_papers", "get_and_summarize_paper", "write_review"},
         "level3": {"conduct_literature_review"},
     }
@@ -625,7 +963,12 @@ def test_repeatability_skips_scenarios_with_a_single_run() -> None:
 def test_fingerprint_covers_step_limit_and_parallel_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    for name in ("AGENT_MAX_STEPS", "LLM_PARALLEL_TOOL_CALLS"):
+    for name in (
+        "AGENT_MAX_STEPS",
+        "AGENT_MAX_REPEATED_CALLS",
+        "AGENT_MAX_TOOL_ERROR_STREAK",
+        "LLM_PARALLEL_TOOL_CALLS",
+    ):
         monkeypatch.delenv(name, raising=False)
 
     def fingerprint(**extra: Any) -> str:
@@ -633,7 +976,45 @@ def test_fingerprint_covers_step_limit_and_parallel_policy(
 
     base = fingerprint()
     assert fingerprint(agent_max_steps=10) != base
-    assert fingerprint(llm_parallel_tool_calls=False) != base
+    assert fingerprint(agent_max_repeated_calls=0) != base
+    assert fingerprint(agent_max_tool_error_streak=3) != base
+    assert fingerprint(llm_parallel_tool_calls=True) != base
+    assert fingerprint(llm_top_p=0.8) != base
+    assert fingerprint(llm_top_k=40) != base
+    assert fingerprint(llm_max_tokens=4096) != base
+    assert fingerprint(llm_enable_thinking=True) != base
+
+
+def test_fingerprint_covers_the_served_model(tmp_path: Path) -> None:
+    settings = _settings(tmp_path, llm_model="qwen-mid")
+    fp8 = ServerIdentity(checkpoint="Qwen/Qwen3.5-4B", quantization="fp8")
+    bf16 = ServerIdentity(checkpoint="Qwen/Qwen3.5-4B", quantization="none")
+    assert runner.config_fingerprint(settings, fp8) != runner.config_fingerprint(settings, bf16)
+    assert runner.config_fingerprint(settings) != runner.config_fingerprint(settings, bf16)
+
+
+def test_records_without_sampling_or_server_still_load() -> None:
+    record = _record("level1", "a", 1, score=1.0, tokens=10)
+    data = json.loads(record.model_dump_json())
+    old = {
+        k: v
+        for k, v in data.items()
+        if k not in {"top_p", "top_k", "llm_max_tokens", "enable_thinking", "server"}
+    }
+    loaded = RunRecord.model_validate(old)
+    assert loaded.top_p is None
+    assert loaded.server is None
+
+
+def test_records_carry_the_loop_guard_limits() -> None:
+    record = _record("level1", "a", 1, score=1.0, tokens=10)
+    data = json.loads(record.model_dump_json())
+    assert data["max_repeated_calls"] is None
+    new_fields = {"max_repeated_calls", "max_tool_error_streak"}
+    old = {k: v for k, v in data.items() if k not in new_fields}
+    loaded = RunRecord.model_validate(old)
+    assert loaded.max_repeated_calls is None
+    assert loaded.max_tool_error_streak is None
 
 
 def test_fingerprint_covers_toolset_version(
@@ -716,3 +1097,67 @@ def test_normal_final_reply_completes(tmp_path: Path, monkeypatch: pytest.Monkey
     )
     _, output = _run(tmp_path)
     assert load_records(output)[0].status == "completed"
+
+
+# --- task variants ---------------------------------------------------------------------------
+
+VARIANT = Scenario(
+    id="demo-polish",
+    topic=SCENARIO.topic,
+    date_from=SCENARIO.date_from,
+    date_to=SCENARIO.date_to,
+    requirement="polish",
+    base="demo",
+)
+
+
+def test_variant_prompt_is_the_base_prompt_plus_one_requirement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tasks: dict[str, str] = {}
+
+    def capture(agent: object, task: str, **kwargs: Any) -> None:
+        tasks[get_settings().workspace_dir.name] = task
+        _write_review(get_settings().workspace_dir, _review_text())
+
+    monkeypatch.setattr(runner, "build_agent", lambda level, *, settings=None: object())
+    monkeypatch.setattr(runner, "run_task", capture)
+    output = tmp_path / "results.jsonl"
+    run_evaluation(
+        scenarios=[SCENARIO, VARIANT],
+        levels=["level2"],
+        repeats=1,
+        output=output,
+        runs_dir=tmp_path / "runs",
+        settings=_settings(tmp_path / "unused"),
+        lookup=_lookup(_papers()),
+    )
+    base, variant = tasks["level2-demo-01"], tasks["level2-demo-polish-01"]
+    requirement = runner.requirement_prompt("polish", _settings(tmp_path))
+    assert "Polish" in requirement
+    assert variant == f"{base.rstrip()}\n\n{requirement}\n"
+    assert "Additional requirement" not in base
+    records = {r.scenario_id: r for r in load_records(output)}
+    assert (records["demo"].task_type, records["demo"].requirement) == ("base", None)
+    assert records["demo"].base_scenario_id == "demo"
+    assert records["demo-polish"].task_type == "variant"
+    assert records["demo-polish"].requirement == "polish"
+    assert records["demo-polish"].base_scenario_id == "demo"
+
+
+def test_old_records_load_as_base_tasks() -> None:
+    data = json.loads(_record("level1", "a", 1, score=1.0, tokens=10).model_dump_json())
+    old = {
+        k: v for k, v in data.items() if k not in {"task_type", "requirement", "base_scenario_id"}
+    }
+    loaded = RunRecord.model_validate(old)
+    assert (loaded.task_type, loaded.requirement) == ("base", None)
+
+
+def test_fingerprint_covers_the_requirement_prompts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path, prompt_version="v3")
+    base = runner.config_fingerprint(settings)
+    monkeypatch.setattr(runner, "_requirement_prompt_hash", lambda requirement, version: "x")
+    assert runner.config_fingerprint(settings) != base

@@ -66,16 +66,32 @@ def append_text(path: Path, content: str, *, max_bytes: int) -> None:
 
 
 def truncate(text: str, *, max_chars: int) -> str:
-    """Cut `text` to at most `max_chars` characters.
+    """Cut `text` to at most `max_chars` characters and say so.
 
     Args:
         text: Text to shorten.
-        max_chars: Maximum number of characters to keep.
+        max_chars: Maximum number of characters of `text` to keep.
 
     Returns:
-        `text` unchanged if short enough, otherwise its first `max_chars` characters.
+        `text` unchanged if short enough, otherwise its first `max_chars` characters followed
+        by a marker giving the characters kept and the total (see `cut_marker`).
     """
-    return text if len(text) <= max_chars else text[:max_chars]
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + cut_marker(max_chars, len(text))
+
+
+def cut_marker(kept: int, total: int) -> str:
+    """Marker appended to text that was cut, so the reader knows part of it is missing.
+
+    Args:
+        kept: Characters kept.
+        total: Characters of the full text.
+
+    Returns:
+        The marker, starting with a blank line.
+    """
+    return f"\n\n[cut: showing {kept} of {total} characters]"
 
 
 def split_text(text: str, *, chunk_size: int, overlap: int = 200) -> list[str]:
@@ -92,10 +108,29 @@ def split_text(text: str, *, chunk_size: int, overlap: int = 200) -> list[str]:
     Raises:
         InvalidInputError: If `overlap` is negative or not smaller than `chunk_size`.
     """
+    return [
+        text[start:end] for start, end in split_spans(text, chunk_size=chunk_size, overlap=overlap)
+    ]
+
+
+def split_spans(text: str, *, chunk_size: int, overlap: int = 200) -> list[tuple[int, int]]:
+    """Character spans `[start, end)` of the chunks `split_text` returns.
+
+    Args:
+        text: Text to split.
+        chunk_size: Maximum characters per chunk.
+        overlap: Characters shared between consecutive chunks.
+
+    Returns:
+        Spans of the non-empty, whitespace-stripped chunks in document order.
+
+    Raises:
+        InvalidInputError: If `overlap` is negative or not smaller than `chunk_size`.
+    """
     if not 0 <= overlap < chunk_size:
         msg = "overlap must satisfy 0 <= overlap < chunk_size."
         raise InvalidInputError(msg)
-    chunks: list[str] = []
+    spans: list[tuple[int, int]] = []
     start = 0
     while start < len(text):
         end = min(start + chunk_size, len(text))
@@ -103,13 +138,15 @@ def split_text(text: str, *, chunk_size: int, overlap: int = 200) -> list[str]:
             space = text.rfind(" ", start + chunk_size // 2, end)
             if space != -1:
                 end = space
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
+        piece = text[start:end]
+        stripped = piece.strip()
+        if stripped:
+            first = start + (len(piece) - len(piece.lstrip()))
+            spans.append((first, first + len(stripped)))
         if end >= len(text):
             break
         start = max(end - overlap, start + 1)
-    return chunks
+    return spans
 
 
 def _check_size(content: str, *, existing: int, max_bytes: int, name: str) -> None:

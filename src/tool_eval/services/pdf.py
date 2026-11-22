@@ -6,7 +6,7 @@ import httpx
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
-from tool_eval.exceptions import ExternalServiceError, InvalidInputError
+from tool_eval.exceptions import ExternalServiceError, InvalidInputError, PaperNotFoundError
 from tool_eval.services.arxiv import validate_arxiv_id
 from tool_eval.services.http import build_client
 from tool_eval.utils.logger import get_logger
@@ -16,7 +16,9 @@ logger = get_logger(__name__)
 _PDF_URL = "https://arxiv.org/pdf/{arxiv_id}"
 
 
-def download_arxiv_pdf(arxiv_id: str, *, dest: Path, timeout: float, max_bytes: int) -> None:
+def download_arxiv_pdf(
+    arxiv_id: str, *, dest: Path, timeout: float, max_bytes: int, version: int | None = None
+) -> None:
     """Download the PDF of an arXiv paper. Only arxiv.org URLs are ever requested.
 
     Args:
@@ -24,12 +26,15 @@ def download_arxiv_pdf(arxiv_id: str, *, dest: Path, timeout: float, max_bytes: 
         dest: Destination file path.
         timeout: HTTP timeout in seconds.
         max_bytes: Maximum accepted download size in bytes.
+        version: Version to download (`…v2`); the unversioned URL when `None`.
 
     Raises:
         InvalidInputError: If the identifier is malformed.
-        ExternalServiceError: If the download fails, is too large or is not a PDF.
+        PaperNotFoundError: If arXiv answers 404.
+        ExternalServiceError: If the download fails otherwise, is too large or is not a PDF.
     """
-    url = _PDF_URL.format(arxiv_id=validate_arxiv_id(arxiv_id))
+    cleaned = validate_arxiv_id(arxiv_id)
+    url = _PDF_URL.format(arxiv_id=cleaned if version is None else f"{cleaned}v{version}")
     too_large = f"The PDF of {arxiv_id} exceeds the {max_bytes / 1_000_000:g} MB size limit."
     body = bytearray()
     try:
@@ -45,6 +50,8 @@ def download_arxiv_pdf(arxiv_id: str, *, dest: Path, timeout: float, max_bytes: 
     except httpx.HTTPStatusError as exc:
         logger.warning("PDF download failed for %s: %s", arxiv_id, exc)
         msg = f"arXiv returned HTTP {exc.response.status_code} for the PDF of {arxiv_id}."
+        if exc.response.status_code == 404:
+            raise PaperNotFoundError(msg) from exc
         raise ExternalServiceError(msg) from exc
     except httpx.HTTPError as exc:
         logger.warning("PDF download failed for %s: %s", arxiv_id, exc)

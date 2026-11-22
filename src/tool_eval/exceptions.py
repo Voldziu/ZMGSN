@@ -13,6 +13,10 @@ class ExternalServiceError(ToolEvalError):
     """A remote service (arXiv, Wikipedia, ...) failed or returned unusable data."""
 
 
+class PaperNotFoundError(ExternalServiceError):
+    """arXiv has no PDF for the paper (HTTP 404, also at its latest version)."""
+
+
 class InvalidInputError(ToolEvalError):
     """The caller supplied input that cannot be processed."""
 
@@ -23,3 +27,7 @@ class PromptNotFoundError(ToolEvalError):
 
 class TrackingServerError(ToolEvalError):
     """MLflow tracing is switched on but its tracking server is not reachable or not healthy."""
+
+
+class AgentLoopError(Exception):
+    """The loop guard stopped a run whose agent is stuck; never reported back to the agent."""

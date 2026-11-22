@@ -5,6 +5,12 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from langdetect import (  # type: ignore[import-untyped]
+    DetectorFactory,
+    LangDetectException,
+    detect,
+)
+
 from tool_eval.evaluation.models import CriterionResult, OutcomeScore, Scenario
 from tool_eval.exceptions import InvalidInputError
 from tool_eval.services.arxiv import ArxivPaper, fetch_arxiv_papers
@@ -32,9 +38,20 @@ CRITERIA = (
     "papers_read",
 )
 
+FACTS = ("papers_cited", "cited_ids_exist", "cited_in_window", "text_extracted")
+
 # Bump whenever a criterion is added or changes meaning; it is part of the run config hash.
 # 2: papers_read (every cited paper's full text was extracted in the run).
-CHECKS_VERSION = 2
+# 3: fact checks on every arXiv id in the file, and the table/polish requirement checks.
+CHECKS_VERSION = 3
+
+# Every arXiv id in the file: abs/pdf URLs (any version) and `arXiv:<id>` mentions.
+_ANY_ID = re.compile(rf"(?:arxiv\.org/(?:abs|pdf)/|arXiv:\s?)({_ID})(?:v\d+)?", re.IGNORECASE)
+_HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+_TABLE_SEPARATOR = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$")
+_URL = re.compile(r"https?://\S+")
+# Text of a paper block shorter than this is too little to tell its language.
+_MIN_LANGUAGE_CHARS = 40
 
 
 class ArxivLookup:
@@ -120,16 +137,21 @@ def evaluate_review(
         ExternalServiceError: If arXiv cannot be reached while checking ids.
     """
     if not review_file.is_file():
+        missing = [
+            CriterionResult(name=name, passed=False, detail="review file missing")
+            for name in (*CRITERIA, *FACTS)
+        ]
+        requirement = None
+        if scenario.requirement in ("table", "polish"):
+            requirement = _check("requirement_met", False, "review file missing")
         return OutcomeScore.from_criteria(
-            [
-                CriterionResult(name=name, passed=False, detail="review file missing")
-                for name in CRITERIA
-            ]
+            missing[: len(CRITERIA)], facts=missing[len(CRITERIA) :], requirement=requirement
         )
     text = review_file.read_text(encoding="utf-8", errors="replace")
     sections, bibliography = _parse(text)
     ids = [section.arxiv_id for section in sections if section.arxiv_id]
-    papers = lookup(list(dict.fromkeys(ids))) if ids else {}
+    cited = cited_ids(text)
+    papers = lookup(list(dict.fromkeys([*ids, *cited]))) if ids or cited else {}
 
     results = [
         CriterionResult(name="file_exists", passed=True),
@@ -171,7 +193,177 @@ def evaluate_review(
         _check("no_duplicates", bool(ids) and len(ids) == len(set(ids)), "papers must be distinct"),
         _papers_read(ids, workspace),
     ]
-    return OutcomeScore.from_criteria(results)
+    return OutcomeScore.from_criteria(
+        results,
+        facts=_facts(cited, papers, workspace, scenario, expected_papers),
+        requirement=_requirement(text, cited, papers, scenario),
+    )
+
+
+def cited_ids(text: str) -> list[str]:
+    """Every distinct arXiv id in `text`, in order of first mention, without version suffix.
+
+    Args:
+        text: Review text.
+
+    Returns:
+        The ids.
+    """
+    return list(dict.fromkeys(match.group(1) for match in _ANY_ID.finditer(text)))
+
+
+def _facts(
+    cited: Sequence[str],
+    papers: Mapping[str, ArxivPaper | None],
+    workspace: Path,
+    scenario: Scenario,
+    expected_papers: int,
+) -> list[CriterionResult]:
+    unknown = [i for i in cited if not papers.get(i)]
+    outside = [i for i in cited if papers.get(i) and not _in_window(papers.get(i), scenario)]
+    unread = [i for i in cited if not (workspace / "texts" / f"{paper_file_stem(i)}.txt").is_file()]
+    return [
+        _check(
+            "papers_cited",
+            len(cited) >= expected_papers,
+            f"cites {len(cited)} distinct papers, expected at least {expected_papers}",
+        ),
+        _check(
+            "cited_ids_exist", bool(cited) and not unknown, f"unknown ids: {', '.join(unknown)}"
+        ),
+        _check(
+            "cited_in_window",
+            bool(cited) and not unknown and not outside,
+            f"outside {scenario.date_from}..{scenario.date_to}: {', '.join(outside or unknown)}",
+        ),
+        _check(
+            "text_extracted",
+            bool(cited) and not unread,
+            f"text not extracted in this run: {', '.join(unread)}" if cited else "no ids cited",
+        ),
+    ]
+
+
+def _requirement(
+    text: str, cited: Sequence[str], papers: Mapping[str, ArxivPaper | None], scenario: Scenario
+) -> CriterionResult | None:
+    if scenario.requirement == "table":
+        return _table_requirement(text, cited, papers)
+    if scenario.requirement == "polish":
+        return _polish_requirement(text, cited)
+    return None  # base task, or no_surveys (decided by the judge)
+
+
+def _paper_blocks(text: str, cited: Sequence[str]) -> tuple[int | None, list[list[str]]]:
+    """Index of the first paper heading and the line blocks of paper sections.
+
+    A paper section is a heading (any level below the first-level title) followed, before the
+    next heading, by a line naming a cited id.
+    """
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if _HEADING.match(line)]
+    blocks: list[list[str]] = []
+    first: int | None = None
+    wanted = set(cited)
+    for n, start in enumerate(starts):
+        end = starts[n + 1] if n + 1 < len(starts) else len(lines)
+        block = lines[start:end]
+        heading = _HEADING.match(block[0])
+        if heading and len(heading.group(1)) == 1:
+            continue
+        if any(set(cited_ids(line)) & wanted for line in block[1:]):
+            blocks.append(block)
+            first = start if first is None else first
+    return first, blocks
+
+
+def paper_sections(text: str) -> list[tuple[str, str]]:
+    """The paper sections of a review as (arXiv id, summary), whatever the heading level.
+
+    A paper section is a heading below the first-level title followed by a line naming an arXiv
+    id; its summary is its text without the heading, URLs and lines naming an id.
+
+    Args:
+        text: Review text.
+
+    Returns:
+        One pair per section, in order.
+    """
+    _, blocks = _paper_blocks(text, cited_ids(text))
+    sections = []
+    for block in blocks:
+        ids = [i for line in block[1:] for i in cited_ids(line)]
+        summary = " ".join(
+            line.strip()
+            for line in block[1:]
+            if line.strip() and not _URL.search(line) and not cited_ids(line)
+        )
+        sections.append((ids[0], summary))
+    return sections
+
+
+def _table_requirement(
+    text: str, cited: Sequence[str], papers: Mapping[str, ArxivPaper | None]
+) -> CriterionResult:
+    lines = text.splitlines()
+    first_section, _ = _paper_blocks(text, cited)
+    title = next((i for i, line in enumerate(lines) if line.startswith("# ")), 0)
+    end = first_section if first_section is not None else len(lines)
+    region = lines[title:end]
+    separator = next((i for i, line in enumerate(region) if _TABLE_SEPARATOR.match(line)), None)
+    if separator is None or separator == 0 or not region[separator - 1].strip().startswith("|"):
+        return _check("requirement_met", False, "no Markdown table before the first paper section")
+    rows: list[str] = []
+    for line in region[separator + 1 :]:
+        if not line.strip().startswith("|"):
+            break
+        rows.append(line)
+    normalized_rows = [_normalize(row) for row in rows]
+    missing = []
+    for arxiv_id in cited:
+        paper = papers.get(arxiv_id)
+        title_key = _normalize(paper.title) if paper else None
+        found = any(
+            arxiv_id in row or (title_key is not None and title_key in normalized)
+            for row, normalized in zip(rows, normalized_rows, strict=True)
+        )
+        if not found:
+            missing.append(arxiv_id)
+    return _check(
+        "requirement_met",
+        bool(cited) and not missing,
+        f"papers missing from the table: {', '.join(missing)}" if cited else "no ids cited",
+    )
+
+
+def _polish_requirement(text: str, cited: Sequence[str]) -> CriterionResult:
+    _, blocks = _paper_blocks(text, cited)
+    languages = []
+    for block in blocks:
+        body = [
+            line
+            for line in block[1:]
+            if line.strip() and not _URL.search(line) and not cited_ids(line)
+        ]
+        prose = _URL.sub("", " ".join(body)).strip()
+        if len(prose) >= _MIN_LANGUAGE_CHARS:
+            languages.append(_language(prose))
+    not_polish = [lang for lang in languages if lang != "pl"]
+    return _check(
+        "requirement_met",
+        bool(languages) and not not_polish,
+        f"summaries detected as {', '.join(sorted(set(not_polish)))}"
+        if languages
+        else "no paper summaries found",
+    )
+
+
+def _language(text: str) -> str:
+    DetectorFactory.seed = 0  # langdetect is random otherwise
+    try:
+        return str(detect(text))
+    except LangDetectException:
+        return "unknown"
 
 
 def _papers_read(ids: Sequence[str], workspace: Path) -> CriterionResult:

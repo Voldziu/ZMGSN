@@ -2,12 +2,16 @@
 
 import hashlib
 import json
+import random
 import re
 import secrets
 import shutil
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Iterable, Sequence
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TextIO
 
 import openai
 from langchain_core.messages import AIMessage, AnyMessage
@@ -17,29 +21,53 @@ from tool_eval.agent import build_agent, run_task
 from tool_eval.config import Settings, use_settings
 from tool_eval.evaluation.checks import CHECKS_VERSION, Lookup, evaluate_review
 from tool_eval.evaluation.cost import RunMeter
-from tool_eval.evaluation.models import OutcomeScore, RunRecord, RunStatus, Scenario
+from tool_eval.evaluation.loop_guard import LoopGuard
+from tool_eval.evaluation.models import (
+    REQUIREMENTS,
+    OutcomeScore,
+    Requirement,
+    RunRecord,
+    RunStatus,
+    Scenario,
+)
+from tool_eval.evaluation.progress import Progress, terminal_stderr
+from tool_eval.evaluation.server_identity import ServerIdentity, read_server_identity
+from tool_eval.evaluation.steps import StepLogger
 from tool_eval.evaluation.tracing import (
     start_tracing,
     stop_tracing,
     traced_run,
     tracing_enabled,
 )
-from tool_eval.exceptions import ExternalServiceError, InvalidInputError
+from tool_eval.exceptions import (
+    AgentLoopError,
+    ExternalServiceError,
+    InvalidInputError,
+    PromptNotFoundError,
+)
 from tool_eval.prompts import load_prompt
+from tool_eval.services.network import network_meter
+from tool_eval.services.reading import reading_meter
 from tool_eval.services.reports import REVIEW_PATH
-from tool_eval.tools.registry import TOOLSET_VERSION
-from tool_eval.utils.logger import get_logger
+from tool_eval.tools.registry import TOOLSET_VERSION, TOOLSETS
+from tool_eval.utils.logger import get_logger, run_context
 
 logger = get_logger(__name__)
+
+# Waits (seconds) between attempts to score a run when arXiv is unavailable; the agent run
+# itself is never repeated.
+SCORING_RETRY_WAITS: tuple[int, ...] = (60, 180, 600)
+_sleep = time.sleep
 
 _CONTEXT_OVERFLOW = re.compile(r"context[ _](?:size|length|window)", re.IGNORECASE)
 
 
-def config_fingerprint(settings: Settings) -> str:
+def config_fingerprint(settings: Settings, server: ServerIdentity | None = None) -> str:
     """Hash every setting that changes run results, so incomparable runs can be told apart.
 
     Args:
         settings: Settings of the run.
+        server: Identity of the served model; `None` hashes an all-unknown identity.
 
     Returns:
         Hex SHA-256 digest.
@@ -47,19 +75,51 @@ def config_fingerprint(settings: Settings) -> str:
     payload = {
         "model": settings.llm_model,
         "temperature": settings.agent_temperature,
+        "top_p": settings.llm_top_p,
+        "top_k": settings.llm_top_k,
+        "llm_max_tokens": settings.llm_max_tokens,
+        "enable_thinking": settings.llm_enable_thinking,
+        "server": (server or ServerIdentity()).model_dump(),
         "max_steps": settings.agent_max_steps,
+        "max_repeated_calls": settings.agent_max_repeated_calls,
+        "max_tool_error_streak": settings.agent_max_tool_error_streak,
         "parallel_tool_calls": settings.effective_parallel_tool_calls,
         "toolset_version": TOOLSET_VERSION,
         "checks_version": CHECKS_VERSION,
         "prompt_version": settings.prompt_version,
         "system_prompt": load_prompt("system", settings.prompt_version).sha256,
         "task_prompt": load_prompt("evaluation", settings.prompt_version).sha256,
+        "requirement_prompts": {
+            requirement: _requirement_prompt_hash(requirement, settings.prompt_version)
+            for requirement in REQUIREMENTS
+        },
         "review_paper_count": settings.review_paper_count,
         "chunk_size": settings.chunk_size,
         "text_max_chars": settings.text_max_chars,
         "pipeline_max_chunks": settings.pipeline_max_chunks,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def requirement_prompt(requirement: Requirement, settings: Settings) -> str:
+    """The statement a variant task adds to the base task prompt.
+
+    Args:
+        requirement: The variant's requirement.
+        settings: Settings; their prompt version selects the file.
+
+    Returns:
+        The requirement statement.
+    """
+    return load_prompt(f"requirement_{requirement}", settings.prompt_version).text.strip()
+
+
+def _requirement_prompt_hash(requirement: Requirement, version: str) -> str | None:
+    """Hash of a requirement prompt; `None` for prompt versions that have none (v1, v2)."""
+    try:
+        return load_prompt(f"requirement_{requirement}", version).sha256
+    except PromptNotFoundError:
+        return None
 
 
 def arxiv_cache_dir(settings: Settings, runs_dir: Path) -> Path:
@@ -75,6 +135,29 @@ def arxiv_cache_dir(settings: Settings, runs_dir: Path) -> Path:
     return settings.arxiv_cache_dir or runs_dir.parent / "arxiv_cache"
 
 
+def block_order(levels: Iterable[str], *, seed: int, repeat: int, scenario_id: str) -> list[str]:
+    """Return the order in which one block (one repeat of one scenario) runs its levels.
+
+    The order is a random permutation that depends only on the seed, the repeat, the scenario
+    and the set of levels, so the seed recorded with each run reproduces it. String seeds are
+    hashed with SHA-512, and only `Random.random()` is drawn, whose sequence for a given seed
+    Python keeps stable across versions. The runner plans every block over all levels of the
+    tool set, so `block_order(TOOLSETS, ...)` recomputes the plan a record's position refers to.
+
+    Args:
+        levels: Tool level keys of the block; duplicates and their order are ignored.
+        seed: Order seed of the evaluation.
+        repeat: Repetition number (1-based).
+        scenario_id: Scenario of the block.
+
+    Returns:
+        The distinct levels in run order.
+    """
+    rng = random.Random(f"{seed}:{repeat}:{scenario_id}")
+    keys = {level: rng.random() for level in sorted(set(levels))}
+    return sorted(keys, key=keys.__getitem__)
+
+
 def run_evaluation(
     *,
     scenarios: Sequence[Scenario],
@@ -84,10 +167,17 @@ def run_evaluation(
     runs_dir: Path,
     settings: Settings,
     lookup: Lookup,
+    order_seed: int | None = None,
+    progress_file: TextIO | None = None,
+    server: ServerIdentity | None = None,
 ) -> int:
     """Run every (repeat, scenario, level) combination that has no stored result yet.
 
-    Runs are interleaved by repeat so an interrupted evaluation still has balanced data.
+    Runs are interleaved by repeat so an interrupted evaluation still has balanced data. Each
+    block of one repeat and one scenario has a random planned order over all levels of the tool
+    set (`block_order`), and its levels run in that order, so no level systematically runs first
+    and pays for cold caches. Positions in the plan stay unique when a results file is resumed
+    with other levels.
     Runs that ended in `error` (infrastructure failures) are retried on the next invocation;
     `failed` runs are scored and kept.
 
@@ -99,6 +189,12 @@ def run_evaluation(
         runs_dir: Directory holding one workspace per run (recreated for each run).
         settings: Base settings; the temperature and model come from here.
         lookup: Resolves arXiv ids to metadata for the outcome checks.
+        order_seed: Seed of the level order within blocks. Defaults to the seed recorded in
+            `output` (so a resumed evaluation keeps its plan), else a new random seed.
+        progress_file: Stream for the progress bars; `None` draws them on stderr when it is a
+            terminal and draws nothing otherwise.
+        server: Identity of the served model; read from the server and the preset file when
+            `None`.
 
     Returns:
         Number of runs executed in this invocation.
@@ -108,21 +204,74 @@ def run_evaluation(
         TrackingServerError: If MLflow tracing is on but its server is not healthy.
     """
     output.parent.mkdir(parents=True, exist_ok=True)
-    done = _finished_runs(output, config_fingerprint(settings))
+    if server is None:
+        server = read_server_identity(settings.llm_base_url, served_name=settings.llm_model)
+    done, recorded_seed = _read_results(output, config_fingerprint(settings, server))
+    if order_seed is None:
+        order_seed = recorded_seed if recorded_seed is not None else secrets.randbelow(2**31)
+    to_run = sum(
+        _run_id(level, scenario.id, repeat) not in done
+        for repeat in range(1, repeats + 1)
+        for scenario in scenarios
+        for level in set(levels)
+    )
+    logger.info(
+        "server: checkpoint=%s, vllm=%s, quantization=%s, parser=%s",
+        server.checkpoint,
+        server.vllm_version,
+        server.quantization,
+        server.tool_parser,
+    )
+    logger.info(
+        "evaluation: model=%s, levels=%s, scenarios=%s, repeats=%d, order_seed=%d, "
+        "finished=%d, to_run=%d",
+        settings.llm_model,
+        " ".join(dict.fromkeys(levels)),
+        " ".join(scenario.id for scenario in scenarios),
+        repeats,
+        order_seed,
+        len(done),
+        to_run,
+    )
     tracing = tracing_enabled()
     if tracing:
         start_tracing()  # fails before any run starts
+    planned = repeats * len(scenarios) * len(set(levels))
+    progress = Progress(
+        model=settings.llm_model,
+        planned_runs=planned,
+        finished_runs=planned - to_run,
+        repeats=repeats,
+        scenarios=len(scenarios),
+        file=progress_file if progress_file is not None else terminal_stderr(),
+    )
     try:
-        return _execute_runs(
-            scenarios=scenarios,
-            levels=levels,
-            repeats=repeats,
-            output=output,
-            runs_dir=runs_dir,
-            settings=settings,
-            lookup=lookup,
-            done=done,
-        )
+        with progress:
+            executed = _execute_runs(
+                scenarios=scenarios,
+                levels=levels,
+                repeats=repeats,
+                output=output,
+                runs_dir=runs_dir,
+                settings=settings,
+                lookup=lookup,
+                done=done,
+                order_seed=order_seed,
+                progress=progress,
+                server=server,
+            )
+        planned_ids = {
+            _run_id(level, scenario.id, repeat)
+            for repeat in range(1, repeats + 1)
+            for scenario in scenarios
+            for level in set(levels)
+        }
+        missing = _unscored(output, planned_ids, config_fingerprint(settings, server))
+        if missing:
+            logger.warning(
+                "%d planned runs have no scored record: %s", len(missing), " ".join(missing)
+            )
+        return executed
     finally:
         if tracing:
             stop_tracing()
@@ -138,13 +287,24 @@ def _execute_runs(
     settings: Settings,
     lookup: Lookup,
     done: set[str],
+    order_seed: int,
+    progress: Progress,
+    server: ServerIdentity,
 ) -> int:
     executed = 0
+    requested = set(levels)
     for repeat in range(1, repeats + 1):
-        for scenario in scenarios:
-            for level in levels:
-                if _run_id(level, scenario.id, repeat) in done:
+        progress.repeat(repeat)
+        for index, scenario in enumerate(scenarios, start=1):
+            progress.scenario(index, scenario.id)
+            # Planned over the whole tool set, so positions do not depend on `levels`.
+            plan = block_order(
+                [*TOOLSETS, *levels], seed=order_seed, repeat=repeat, scenario_id=scenario.id
+            )
+            for position, level in enumerate(plan, start=1):
+                if level not in requested or _run_id(level, scenario.id, repeat) in done:
                     continue
+                progress.run(level, position, len(plan))
                 record = run_single(
                     level=level,
                     scenario=scenario,
@@ -152,17 +312,15 @@ def _execute_runs(
                     runs_dir=runs_dir,
                     settings=settings,
                     lookup=lookup,
+                    order_seed=order_seed,
+                    block_position=position,
+                    block_size=len(plan),
+                    server=server,
                 )
                 with output.open("a", encoding="utf-8") as handle:
                     handle.write(record.model_dump_json() + "\n")
                 executed += 1
-                logger.info(
-                    "%s: %s, success=%s, tokens=%d",
-                    record.run_id,
-                    record.status,
-                    record.outcome.success if record.outcome else None,
-                    record.cost.total_tokens,
-                )
+                progress.run_done()
     return executed
 
 
@@ -174,8 +332,16 @@ def run_single(
     runs_dir: Path,
     settings: Settings,
     lookup: Lookup,
+    order_seed: int,
+    block_position: int,
+    block_size: int,
+    server: ServerIdentity | None = None,
 ) -> RunRecord:
     """Execute one agent run in a fresh workspace and score its output.
+
+    The meter starts once the run's MLflow run is open, and its snapshot is taken when the agent
+    loop ends, so neither tracing set-up nor scoring is part of the run's wall time. Every log
+    line written during the run, from its start line to its end line, carries the run ID.
 
     Args:
         level: Tool level key.
@@ -184,6 +350,11 @@ def run_single(
         runs_dir: Parent directory for the run's workspace.
         settings: Base settings.
         lookup: Resolves arXiv ids to metadata for the outcome checks.
+        order_seed: Seed of the level order of the run's block, recorded with the run.
+        block_position: 1-based position of the run in its block's planned order over all
+            levels of the tool set.
+        block_size: Number of runs in that planned order, for the run's start line.
+        server: Identity of the served model, hashed and recorded with the run.
 
     Returns:
         The record of this run; infrastructure failures yield `status="error"`, agent-caused
@@ -210,30 +381,53 @@ def run_single(
         date_from=str(scenario.date_from),
         date_to=str(scenario.date_to),
     )
+    if scenario.requirement is not None:
+        task = f"{task.rstrip()}\n\n{requirement_prompt(scenario.requirement, run_settings)}\n"
 
     started_at = datetime.now(UTC)
-    meter = RunMeter()
     status: RunStatus = "completed"
     error: str | None = None
-    fingerprint = config_fingerprint(run_settings)
+    server = server or ServerIdentity()
+    fingerprint = config_fingerprint(run_settings, server)
     params = {
         "model": run_settings.llm_model,
         "level": level,
         "scenario": scenario.id,
+        "task_type": scenario.task_type,
+        "requirement": scenario.requirement or "",
         "repeat": repeat,
         "seed": run_settings.llm_seed,
+        "order_seed": order_seed,
+        "block_position": block_position,
         "max_steps": run_settings.agent_max_steps,
+        "max_repeated_calls": run_settings.agent_max_repeated_calls,
+        "max_tool_error_streak": run_settings.agent_max_tool_error_streak,
         "llm_max_tokens": run_settings.llm_max_tokens,
         "temperature": run_settings.agent_temperature,
+        "top_p": run_settings.llm_top_p,
+        "top_k": run_settings.llm_top_k,
+        "enable_thinking": run_settings.llm_enable_thinking,
+        "server_checkpoint": server.checkpoint,
+        "server_quantization": server.quantization,
+        "server_tool_parser": server.tool_parser,
+        "server_chat_template_sha256": server.chat_template_sha256,
+        "server_vllm_version": server.vllm_version,
         "parallel_tool_calls": run_settings.effective_parallel_tool_calls,
         "prompt_version": run_settings.prompt_version,
         "toolset_version": TOOLSET_VERSION,
         "checks_version": CHECKS_VERSION,
         "config_sha256": fingerprint,
     }
-    with traced_run(f"{run_settings.llm_model}/{run_id}", params) as trace:
+    with ExitStack() as stack:
+        stack.enter_context(run_context(run_id))
+        logger.info(
+            "start: position %d/%d, seed=%d", block_position, block_size, run_settings.llm_seed
+        )
+        trace = stack.enter_context(traced_run(f"{run_settings.llm_model}/{run_id}", params))
         with (
             use_settings(run_settings),
+            reading_meter() as reads,
+            network_meter() as network,
             trace.agent_span(
                 run_id,
                 tags={
@@ -245,13 +439,24 @@ def run_single(
                 session_id=f"{run_settings.llm_model}/{scenario.id}",
             ),
         ):
+            # Created only now, so wall time covers building the agent and the agent loop and
+            # nothing that waits for the tracking server. An unknown level gets no tool names;
+            # building its agent fails and records an error.
+            tool_names = [tool.name for tool in TOOLSETS.get(level, ())]
+            meter = RunMeter(tool_names=tool_names)
+            steps = StepLogger(tool_names=tool_names)
+            # Last, so the meter and the step log see the reply that makes the guard stop.
+            guard = LoopGuard(
+                max_repeated_calls=run_settings.agent_max_repeated_calls,
+                max_tool_error_streak=run_settings.agent_max_tool_error_streak,
+            )
             try:
                 agent = build_agent(level, settings=run_settings)
                 messages = run_task(
                     agent,
                     task,
                     max_steps=run_settings.agent_max_steps,
-                    callbacks=[meter],
+                    callbacks=[meter, steps, guard],
                     run_name=run_id,
                     tags=[level, scenario.id],
                     metadata={"level": level, "scenario_id": scenario.id, "repeat": repeat},
@@ -264,21 +469,29 @@ def run_single(
                     )
             except GraphRecursionError:
                 status = "step_limit"
+            except AgentLoopError as exc:
+                status = "loop"
+                error = str(exc)
+                logger.warning("loop guard stopped the run: %s", exc)
             except Exception as exc:  # noqa: BLE001 - recorded, not hidden
                 logger.exception("Run %s failed", run_id)
                 status = "failed" if _is_context_overflow(exc) else "error"
                 error = f"{type(exc).__name__}: {exc}"
+            # Before scoring: wall time covers the agent run only.
+            cost = meter.snapshot().model_copy(update={"chars_read": reads.chars_read(), **network})
             trace.set_status(status, error)
 
         outcome: OutcomeScore | None = None
         if status != "error":
             try:
-                outcome = evaluate_review(
-                    workspace / REVIEW_PATH,
-                    workspace=workspace,
-                    scenario=scenario,
-                    expected_papers=run_settings.review_paper_count,
-                    lookup=lookup,
+                outcome = _score_with_retries(
+                    lambda: evaluate_review(
+                        workspace / REVIEW_PATH,
+                        workspace=workspace,
+                        scenario=scenario,
+                        expected_papers=run_settings.review_paper_count,
+                        lookup=lookup,
+                    )
                 )
             except ExternalServiceError as exc:
                 status, error = "error", f"{type(exc).__name__}: {exc}"
@@ -291,10 +504,17 @@ def run_single(
             status=status,
             error=error,
             outcome=outcome,
-            cost=meter.snapshot(),
+            cost=cost,
             model=run_settings.llm_model,
             temperature=run_settings.agent_temperature,
+            top_p=run_settings.llm_top_p,
+            top_k=run_settings.llm_top_k,
+            llm_max_tokens=run_settings.llm_max_tokens,
+            enable_thinking=run_settings.llm_enable_thinking,
+            server=server,
             max_steps=run_settings.agent_max_steps,
+            max_repeated_calls=run_settings.agent_max_repeated_calls,
+            max_tool_error_streak=run_settings.agent_max_tool_error_streak,
             prompt_version=run_settings.prompt_version,
             system_prompt_sha256=system_prompt.sha256,
             task_prompt_sha256=task_prompt.sha256,
@@ -304,14 +524,51 @@ def run_single(
             pipeline_max_chunks=run_settings.pipeline_max_chunks,
             config_sha256=fingerprint,
             seed=run_settings.llm_seed,
+            order_seed=order_seed,
+            block_position=block_position,
             mlflow_run_id=trace.mlflow_run_id,
             trace_id=trace.trace_id,
             date_from=scenario.date_from,
             date_to=scenario.date_to,
+            task_type=scenario.task_type,
+            requirement=scenario.requirement,
+            base_scenario_id=scenario.base_id,
             started_at=started_at,
         )
         trace.finish(record, workspace / REVIEW_PATH)
+        logger.info(
+            "end: %s, success=%s, tokens=%d, wall=%.1f s, tool_calls=%d, tool_errors=%d",
+            record.status,
+            record.success,
+            cost.total_tokens,
+            cost.wall_seconds,
+            cost.tool_calls,
+            cost.tool_errors,
+        )
     return record
+
+
+def _score_with_retries(score: Callable[[], OutcomeScore]) -> OutcomeScore:
+    """Score a finished run, retrying only the scoring when an external service fails.
+
+    Raises:
+        ExternalServiceError: If every attempt failed.
+    """
+    for wait in (*SCORING_RETRY_WAITS, None):
+        try:
+            return score()
+        except ExternalServiceError as exc:
+            if wait is None:
+                raise
+            logger.warning("scoring failed (%s); retrying in %d s", exc, wait)
+            _sleep(wait)
+    raise AssertionError  # unreachable: the last attempt returns or raises
+
+
+def _unscored(output: Path, planned: set[str], fingerprint: str) -> list[str]:
+    """Planned run ids that have no scored record (absent, or only `error` records)."""
+    scored, _ = _read_results(output, fingerprint)
+    return sorted(planned - scored)
 
 
 def _run_id(level: str, scenario_id: str, repeat: int) -> str:
@@ -338,13 +595,17 @@ def _is_context_overflow(exc: Exception) -> bool:
     return isinstance(exc, openai.BadRequestError) and bool(_CONTEXT_OVERFLOW.search(str(exc)))
 
 
-def _finished_runs(output: Path, fingerprint: str) -> set[str]:
+def _read_results(output: Path, fingerprint: str) -> tuple[set[str], int | None]:
+    """Return the IDs of the finished runs in `output` and the last order seed recorded there."""
     if not output.is_file():
-        return set()
+        return set(), None
     finished: set[str] = set()
+    order_seed: int | None = None
     for line in output.read_text(encoding="utf-8").splitlines():
         if line.strip():
             record = RunRecord.model_validate_json(line)
+            if record.order_seed is not None:
+                order_seed = record.order_seed
             if record.status == "error":
                 continue
             if record.config_sha256 != fingerprint:
@@ -354,4 +615,4 @@ def _finished_runs(output: Path, fingerprint: str) -> set[str]:
                 )
                 raise InvalidInputError(msg)
             finished.add(record.run_id)
-    return finished
+    return finished, order_seed

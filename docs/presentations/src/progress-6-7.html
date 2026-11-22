@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>ZMGSN 2026 – zajęcia 6–7</title>
+<!--
+  Slides for classes 6–7, appended to docs/presentations/progress.pdf.
+  Render (each .slide is one 960×540 pt page). Headless Chrome on this Mac aborts with
+  "path_service ... Failed to get the path for 1001"; Edge with its own profile works:
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" --headless=new \
+      --user-data-dir="$(mktemp -d)" --no-pdf-header-footer --virtual-time-budget=15000 \
+      --print-to-pdf=docs/presentations/progress-6-7.pdf file://$PWD/docs/presentations/src/progress-6-7.html
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=block" rel="stylesheet">
+<style>
+@page { size: 1280px 720px; margin: 0; }
+:root {
+  --navy: #0f172a;
+  --navy-2: #1e293b;
+  --navy-3: #334155;
+  --cyan: #38bdf8;
+  --blue: #2563eb;
+  --blue-700: #1d4ed8;
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-200: #bfdbfe;
+  --blue-300: #93c5fd;
+  --ink: #0f172a;
+  --text: #334155;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --line: #e2e8f0;
+  --line-2: #cbd5e1;
+  --card: #f8fafc;
+  --orange-50: #fff7ed;
+  --orange-600: #ea580c;
+  --orange-800: #9a3412;
+  --green-50: #f0fdf4;
+  --green-200: #bbf7d0;
+  --green-600: #16a34a;
+  --green-800: #166534;
+  --red-50: #fef2f2;
+  --red-200: #fecaca;
+  --red-700: #b91c1c;
+}
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; padding: 0; }
+body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: var(--text); background: #fff; }
+@media screen {
+  body { background: #cbd5e1; padding: 24px 0; }
+  .slide { margin: 0 auto 24px; box-shadow: 0 4px 24px rgba(15, 23, 42, .18); }
+}
+.slide { width: 1280px; height: 720px; position: relative; overflow: hidden; background: #fff; break-after: page; page-break-after: always; }
+.slide:last-child { break-after: auto; page-break-after: auto; }
+p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+
+/* Shared type */
+.pad { position: absolute; inset: 0; padding: 54px 80px 44px; }
+.label { font-weight: 700; font-size: 14px; letter-spacing: .02em; text-transform: uppercase; color: var(--blue); }
+.h { font-family: 'Space Grotesk', 'Inter', sans-serif; font-weight: 700; font-size: 38px; line-height: 1.12; letter-spacing: -.01em; color: var(--ink); margin: 12px 0 0; }
+.caps { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.mono, code { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+code { font-size: .88em; color: var(--blue-700); background: var(--blue-50); padding: 1px 3px; border-radius: 4px; white-space: nowrap; }
+.arrow { color: var(--blue); font-weight: 700; padding: 0 3px; }
+svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Shared blocks */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; }
+.card.blue { background: var(--blue-50); border-color: var(--blue-200); }
+.card-title { font-family: 'Space Grotesk', 'Inter', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); margin: 4px 0 10px; }
+.card.blue .card-title { color: var(--blue-700); }
+.banner { display: flex; align-items: center; gap: 14px; background: var(--orange-50); border-left: 5px solid var(--orange-600); padding: 15px 22px; color: var(--orange-800); font-size: 17px; line-height: 1.4; }
+.banner b { font-weight: 700; }
+.banner svg { width: 26px; height: 26px; flex: none; }
+.callout { display: flex; align-items: center; gap: 16px; background: var(--card); border-left: 5px solid var(--blue); padding: 16px 22px; font-size: 17px; color: var(--text); line-height: 1.45; }
+.callout b { color: var(--ink); }
+.callout svg.i { color: var(--blue); width: 26px; height: 26px; }
+.bullets li { position: relative; padding-left: 20px; margin-top: 7px; font-size: 16px; line-height: 1.4; color: var(--text); }
+.bullets li::before { content: ""; position: absolute; left: 3px; top: .55em; width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 14.5px; padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--line-2); color: var(--ink); white-space: nowrap; }
+.chip.blue { background: var(--blue-50); border-color: var(--blue-200); color: var(--blue-700); }
+
+/* Dark slides */
+.dark { background: var(--navy); color: #e2e8f0; }
+.eyebrow-cyan { position: absolute; left: 80px; top: 150px; color: var(--cyan); font-size: 16px; font-weight: 500; letter-spacing: .02em; }
+.hero { position: absolute; left: 80px; top: 190px; width: 1100px; margin: 0; font-weight: 700; font-size: 62px; line-height: 1.22; letter-spacing: -.02em; color: #fff; }
+.hero-sub { position: absolute; left: 80px; top: 432px; width: 860px; font-size: 23px; line-height: 1.6; color: var(--faint); }
+.bar { position: absolute; left: 80px; top: 548px; width: 64px; height: 4px; border-radius: 2px; background: var(--cyan); }
+.names { position: absolute; right: 80px; bottom: 54px; font-size: 22px; color: var(--faint); }
+
+/* Side panels */
+.left { position: absolute; left: 0; top: 0; bottom: 0; padding: 54px 40px 44px 80px; }
+.panel { position: absolute; right: 0; top: 0; bottom: 0; padding: 54px 44px 44px; }
+.panel.dark-panel { background: var(--navy); border-left: 1px solid var(--navy-3); }
+.panel.blue-panel { background: var(--blue-50); border-left: 1px solid var(--blue-200); }
+.panel-title { font-family: 'Space Grotesk', 'Inter', sans-serif; font-weight: 700; font-size: 25px; color: var(--cyan); }
+.panel-heading { font-family: 'Space Grotesk', 'Inter', sans-serif; font-weight: 700; font-size: 24px; color: #1e3a8a; }
+
+/* 07 changes */
+.changes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; margin-top: 28px; }
+.chg { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 20px; min-height: 102px; }
+.chg.span2 { grid-column: 1 / -1; min-height: 0; }
+.chg-main { font-size: 20px; font-weight: 600; color: var(--ink); margin-top: 7px; line-height: 1.3; }
+.chg-sub { font-size: 15px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+
+/* Tables */
+.tbl { width: 100%; border-collapse: collapse; font-size: 15px; }
+.tbl th { text-align: left; font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 0 12px 10px; border-bottom: 2px solid var(--line); }
+.tbl td { padding: 9px 12px; border-bottom: 1px solid var(--line); color: var(--ink); line-height: 1.4; vertical-align: top; }
+.tbl td.num { color: var(--faint); width: 34px; font-variant-numeric: tabular-nums; }
+.tbl td.date { color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tbl td.muted { color: var(--muted); }
+
+/* 08 code box */
+.codebox { margin: 18px 0 0; background: var(--navy-2); border: 1px solid var(--navy-3); border-radius: 12px; padding: 18px 20px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13.5px; line-height: 1.6; color: #cbd5e1; white-space: pre; }
+.codebox .hd { color: #f1f5f9; font-weight: 600; }
+.codebox .ph { color: #94a3b8; }
+.dark-notes li { position: relative; padding-left: 20px; margin-top: 10px; font-size: 16px; line-height: 1.45; color: #cbd5e1; }
+.dark-notes li::before { content: ""; position: absolute; left: 2px; top: .55em; width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); }
+
+/* 09 icon rows */
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 26px; }
+.irow { display: flex; gap: 16px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 15px 18px; margin-top: 12px; }
+.irow svg.i { color: var(--blue); width: 26px; height: 26px; margin-top: 1px; }
+.irow b { display: block; font-size: 17px; color: var(--ink); font-weight: 700; }
+.irow span { display: block; font-size: 15px; color: var(--text); margin-top: 3px; line-height: 1.4; }
+
+/* 10 diagram */
+.dg { position: absolute; left: 72px; top: 168px; width: 760px; height: 470px; }
+.dg .box { position: absolute; width: 220px; height: 80px; border-radius: 12px; border: 1.5px solid var(--line-2); background: #fff; padding: 11px 14px; }
+.dg .box .t { font-size: 15px; font-weight: 700; color: var(--ink); line-height: 1.25; }
+.dg .box .s { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+.dg .box.agent { background: var(--blue-50); border-color: var(--blue-300); }
+.dg .box.agent .t { color: var(--blue-700); }
+.dg .box.model { background: var(--navy); border-color: var(--navy); }
+.dg .box.model .t { color: #fff; }
+.dg .box.model .s { color: var(--faint); }
+.dg .box.out { background: var(--card); }
+.dg svg.arrows { position: absolute; left: 0; top: 0; overflow: visible; }
+.dg .dlabel { position: absolute; font-size: 12.5px; line-height: 1.35; color: var(--blue-700); font-style: italic; }
+.dg .legend { position: absolute; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.dg .legend div { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.mech { margin-top: 22px; }
+.mech .ml { font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--blue); }
+.mech .mt { font-size: 16.5px; line-height: 1.45; color: var(--ink); margin-top: 5px; }
+
+/* 11 tools */
+.levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 26px; }
+.level { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; height: 384px; }
+.level.blue { background: var(--blue-50); border-color: var(--blue-200); }
+.level .ttl { font-size: 23px; font-weight: 700; color: var(--ink); margin-top: 6px; }
+.level.blue .ttl { color: var(--blue-700); }
+.level.blue .caps { color: var(--blue); }
+.level .desc { font-size: 14.5px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+.tools { margin-top: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13.5px; color: var(--ink); }
+.tools li { line-height: 1.68; white-space: nowrap; }
+.tools .llm { color: var(--blue-700); font-weight: 600; }
+.tools .llm::after { content: "*"; color: var(--orange-600); font-weight: 700; padding-left: 2px; }
+.legend-llm { font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+.legend-llm b { color: var(--orange-600); }
+
+/* 12 models */
+.badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .07em; color: #fff; background: var(--blue); padding: 3px 8px; border-radius: 999px; margin-left: 8px; vertical-align: 2px; }
+.group { margin-top: 16px; }
+.group .gt { font-size: 18px; font-weight: 700; color: var(--ink); }
+.group .gs { font-size: 14.5px; color: var(--muted); margin-top: 2px; }
+.group .chips { margin-top: 12px; }
+
+/* 13 variables */
+.vars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 26px; }
+.vars .card { min-height: 214px; }
+.vrow { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
+
+/* 14 metrics */
+.mtbl td:first-child { font-weight: 700; white-space: nowrap; }
+.mtbl td { font-size: 15.5px; padding: 14px 12px; }
+.bigword { font-size: 38px; font-weight: 700; letter-spacing: -.02em; color: var(--blue); line-height: 1.1; margin-top: 30px; }
+.bigsub { font-size: 16px; color: var(--text); margin-top: 6px; line-height: 1.4; }
+
+/* 15 plan */
+.hyp { background: var(--card); border-left: 5px solid var(--blue); padding: 14px 20px; margin-top: 14px; }
+.hyp .hl { font-family: 'Space Grotesk', 'Inter', sans-serif; font-weight: 700; font-size: 20px; color: var(--blue-700); }
+.hyp .ht { font-size: 17px; color: var(--ink); line-height: 1.45; margin-top: 4px; }
+.formula { font-family: 'Space Grotesk', 'Inter', sans-serif; font-weight: 700; font-size: 34px; color: var(--blue-700); letter-spacing: -.01em; margin-top: 4px; }
+.irow.plain { background: #fff; }
+
+/* 16 pilot */
+.ptbl td { font-size: 17px; padding: 14px 12px; vertical-align: middle; }
+.ptbl td.model { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 600; font-size: 16px; }
+.pill { display: inline-block; min-width: 128px; padding: 8px 12px; border-radius: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pill span { font-weight: 500; opacity: .75; padding-left: 4px; }
+.pill.ok { background: var(--green-50); color: var(--green-800); border: 1px solid var(--green-200); }
+.pill.bad { background: var(--red-50); color: var(--red-700); border: 1px solid var(--red-200); }
+
+/* 17 status */
+.status { display: grid; grid-template-columns: 1fr 1.15fr; gap: 24px; margin-top: 26px; }
+.done { background: var(--green-50); border: 1px solid var(--green-200); border-radius: 14px; padding: 20px 24px; }
+.done .card-title { color: var(--green-800); }
+.done li { display: flex; align-items: center; gap: 12px; font-size: 17px; color: var(--ink); margin-top: 11px; }
+.done li svg.i { color: var(--green-600); width: 22px; height: 22px; stroke-width: 2.4; }
+.next { }
+.next ol { margin: 0; padding: 0; list-style: none; counter-reset: n; }
+.next li { counter-increment: n; display: flex; align-items: baseline; gap: 12px; font-size: 16.5px; color: var(--ink); margin-top: 9px; line-height: 1.35; }
+.next li::before { content: counter(n); flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--blue-100); color: var(--blue-700); font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; position: relative; top: -1px; }
+</style>
+</head>
+<body>
+
+<!-- Icon sprites -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16.5h5"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7L3.5 12l5 5M15.5 7l5 5-5 5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M3 7h3.5c3 0 4.5 1.5 6 5s3 5 6 5H21"/><path d="M3 17h3.5c1.6 0 2.8-.4 3.8-1.4M14 8.4c1-1 2.2-1.4 3.8-1.4H21"/><path d="M18.5 4.5L21 7l-2.5 2.5M18.5 14.5L21 17l-2.5 2.5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 2.8L1.8 20.5h20.4z" fill="#ea580c" stroke="none"/><path d="M12 9.2v5.2M12 17.2v.3" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/></symbol>
+  </defs>
+</svg>
+
+<!-- 1. Divider -->
+<section class="slide dark">
+  <div class="eyebrow-cyan">ZMGSN 2026 · Zajęcia 6–7</div>
+  <h1 class="hero">Dane, środowisko<br>i metoda badawcza</h1>
+  <p class="hero-sub">Zbiór zadań, środowisko, architektura agenta, zmienne, metryki i plan eksperymentów.</p>
+  <div class="bar"></div>
+  <div class="names">Bartosz Borkowski, Mateusz Gadomski, Mikołaj Machalski</div>
+</section>
+
+<!-- 2. 07 / Co się zmieniło -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">07 / Co się zmieniło</div>
+    <h2 class="h">Zmiany od poprzedniej prezentacji</h2>
+    <div class="changes">
+      <div class="chg">
+        <div class="caps">Inferencja</div>
+        <div class="chg-main">LM Studio <span class="arrow">→</span> vLLM 0.33.0</div>
+        <div class="chg-sub">Docker, RTX 5080 16 GB</div>
+      </div>
+      <div class="chg">
+        <div class="caps">Ewaluator</div>
+        <div class="chg-main">9 <span class="arrow">→</span> 10 checków</div>
+        <div class="chg-sub">nowy <code>papers_read</code>: każda cytowana praca musi być przeczytana w całości</div>
+      </div>
+      <div class="chg">
+        <div class="caps">Baseline</div>
+        <div class="chg-main">Qwen3.5 9B na poziomie 1</div>
+        <div class="chg-sub">zamiast Gemma 4 12B</div>
+      </div>
+      <div class="chg">
+        <div class="caps">Modele</div>
+        <div class="chg-main">3 <span class="arrow">→</span> 5 modeli</div>
+        <div class="chg-sub">w dwóch porównaniach: rodziny i skala</div>
+      </div>
+      <div class="chg">
+        <div class="caps">Zakres</div>
+        <div class="chg-main">OSINT usunięty z zakresu</div>
+        <div class="chg-sub">inne scenariusze możliwe później</div>
+      </div>
+      <div class="chg">
+        <div class="caps">Sukces</div>
+        <div class="chg-main">Przebieg z wyczerpanym limitem kroków nie jest sukcesem</div>
+      </div>
+      <div class="chg span2">
+        <div class="caps">Hipoteza</div>
+        <div class="chg-main">Hipoteza rozbita na H1a i H1b</div>
+        <div class="chg-sub">H1a: L2 vs L1 na zadaniach bazowych · H1b: L2 vs L3 na zadaniach z dodatkowym wymaganiem</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. 08 / Zbiór zadań -->
+<section class="slide">
+  <div class="left" style="width: 820px;">
+    <div class="label">08 / Zbiór zadań</div>
+    <h2 class="h">10 scenariuszy: temat i okno dat</h2>
+    <table class="tbl" style="margin-top: 24px;">
+      <thead><tr><th>#</th><th>Temat (zapytanie)</th><th>Okno dat</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>retrieval augmented generation</td><td class="date">2024-01-01 – 2024-06-30</td></tr>
+        <tr><td class="num">2</td><td>graph neural networks</td><td class="date">2023-01-01 – 2023-06-30</td></tr>
+        <tr><td class="num">3</td><td>diffusion models image generation</td><td class="date">2023-07-01 – 2023-12-31</td></tr>
+        <tr><td class="num">4</td><td>reinforcement learning from human feedback</td><td class="date">2024-01-01 – 2024-12-31</td></tr>
+        <tr><td class="num">5</td><td>federated learning privacy</td><td class="date">2022-01-01 – 2022-12-31</td></tr>
+        <tr><td class="num">6</td><td>quantum error correction</td><td class="date">2023-01-01 – 2023-12-31</td></tr>
+        <tr><td class="num">7</td><td>protein structure prediction</td><td class="date">2022-07-01 – 2023-06-30</td></tr>
+        <tr><td class="num">8</td><td>time series forecasting transformers</td><td class="date">2023-01-01 – 2023-12-31</td></tr>
+        <tr><td class="num">9</td><td>large language model hallucination</td><td class="date">2024-01-01 – 2024-12-31</td></tr>
+        <tr><td class="num">10</td><td>explainable artificial intelligence</td><td class="date">2022-01-01 – 2022-12-31</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel dark-panel" style="width: 460px;">
+    <div class="panel-title">Oczekiwany wynik</div>
+    <div class="mono" style="font-size: 14px; color: var(--faint); margin-top: 6px;">reviews/review.md</div>
+<pre class="codebox"><span class="hd"># &lt;temat&gt;</span>
+
+<span class="hd">## 1. &lt;dokładny tytuł pracy&gt;</span>
+<span class="ph">&lt;cytowanie APA z URL arXiv&gt;</span>
+<span class="ph">&lt;streszczenie z pełnego tekstu&gt;</span>
+
+<span class="hd">## 2. … ## 5.</span>
+
+<span class="hd">## Bibliography</span>
+<span class="ph">- &lt;te same referencje APA&gt;</span></pre>
+    <ul class="dark-notes" style="margin-top: 14px;">
+      <li>N = 5 prac w oknie dat</li>
+      <li>ten sam prompt systemowy i prompt zadania na każdym poziomie</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 4. 09 / Środowisko i dane -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">09 / Środowisko i dane</div>
+    <h2 class="h">Źródła danych i środowisko wykonawcze</h2>
+    <div class="cols2">
+      <div>
+        <div class="caps">Dane</div>
+        <div class="irow"><svg class="i"><use href="#i-search"/></svg><div><b>arXiv API</b><span>filtr okna dat · odstęp ≥ 3 s · 5 prób z backoffem · cache</span></div></div>
+        <div class="irow"><svg class="i"><use href="#i-file"/></svg><div><b>PDF → pypdf</b><span>fragmenty po 3000 znaków, najwyżej 6</span></div></div>
+        <div class="irow"><svg class="i"><use href="#i-globe"/></svg><div><b>Wikipedia</b><span>tylko jako narzędzie tła na L1</span></div></div>
+      </div>
+      <div>
+        <div class="caps">Środowisko</div>
+        <div class="irow"><svg class="i"><use href="#i-chip"/></svg><div><b>Sprzęt</b><span>RTX 5080 16 GB (WSL2)</span></div></div>
+        <div class="irow"><svg class="i"><use href="#i-server"/></svg><div><b>Inferencja</b><span>vLLM 0.33.0, kontekst 32&nbsp;768 tokenów</span></div></div>
+        <div class="irow"><svg class="i"><use href="#i-code"/></svg><div><b>Oprogramowanie</b><span>Python 3.12, LangChain 1.4 / LangGraph 1.2, MLflow 3.18</span></div></div>
+      </div>
+    </div>
+    <div class="callout" style="margin-top: 26px;">
+      <svg class="i"><use href="#i-refresh"/></svg>
+      <div><b>Odtwarzalność:</b> hash konfiguracji · seed zapisywany dla każdego przebiegu · zamrożenie cache przed eksperymentem</div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. 10 / Architektura agenta -->
+<section class="slide">
+  <div class="left" style="width: 860px;">
+    <div class="label">10 / Architektura agenta</div>
+    <h2 class="h">Agent ReAct i przepływ danych</h2>
+  </div>
+  <div class="dg">
+    <svg class="arrows" width="760" height="470" viewBox="0 0 760 470">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+        <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+      </defs>
+      <g stroke="#94a3b8" stroke-width="2" fill="none">
+        <line x1="222" y1="50" x2="267" y2="50" marker-end="url(#ah)"/>
+        <line x1="493" y1="50" x2="537" y2="50" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <line x1="380" y1="103" x2="380" y2="141" marker-start="url(#ah)" marker-end="url(#ah)"/>
+        <line x1="267" y1="184" x2="223" y2="184" marker-end="url(#ah)"/>
+        <line x1="380" y1="227" x2="380" y2="261" marker-end="url(#ah)"/>
+        <line x1="493" y1="304" x2="537" y2="304" marker-end="url(#ah)"/>
+        <line x1="650" y1="347" x2="650" y2="381" marker-end="url(#ah)"/>
+      </g>
+      <path d="M 493 170 H 650 V 104" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#ahb)"/>
+    </svg>
+    <div class="box" style="left: 0; top: 0; height: 100px;"><div class="t">Scenariusz → prompt zadania</div><div class="s">temat + okno dat; ten sam prompt na L1–L3</div></div>
+    <div class="box agent" style="left: 270px; top: 0; height: 100px;"><div class="t">Agent ReAct</div><div class="s">LangChain <span class="mono">create_agent</span> / LangGraph: model ↔ narzędzia</div></div>
+    <div class="box model" style="left: 540px; top: 0; height: 100px;"><div class="t">vLLM</div><div class="s">API OpenAI, natywne tool calling</div></div>
+    <div class="box" style="left: 0; top: 144px;"><div class="t">Serwisy</div><div class="s">arXiv · PDF · pliki w workspace</div></div>
+    <div class="box" style="left: 270px; top: 144px;"><div class="t">Narzędzia L1 / L2 / L3</div><div class="s">12 · 4 · 1 narzędzi</div></div>
+    <div class="dlabel" style="left: 560px; top: 180px; width: 200px;">narzędzia z LLM wołają<br>ten sam model</div>
+    <div class="box out" style="left: 270px; top: 264px;"><div class="t mono" style="font-size: 14px;">reviews/review.md</div><div class="s">wynik w workspace przebiegu</div></div>
+    <div class="box out" style="left: 540px; top: 264px;"><div class="t">Ewaluator</div><div class="s">10 checków, po zakończeniu przebiegu</div></div>
+    <div class="box out" style="left: 540px; top: 384px;"><div class="t">JSONL + MLflow</div><div class="s">rekord przebiegu, metryki, trace</div></div>
+    <div class="legend" style="left: 0; top: 284px; width: 240px;">
+      <div><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#94a3b8" stroke-width="2"/></svg>przepływ danych i wywołań</div>
+      <div><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 5"/></svg>LLM wywołany z narzędzia</div>
+      <div style="display: block; margin-top: 12px;">Tokeny z wywołań wewnątrz narzędzi są liczone osobno.</div>
+    </div>
+  </div>
+  <div class="panel blue-panel" style="width: 420px;">
+    <div class="panel-heading">Mechanizmy</div>
+    <div class="mech"><div class="ml">Pamięć</div><div class="mt">historia wiadomości + workspace jako pamięć zewnętrzna</div></div>
+    <div class="mech"><div class="ml">Planowanie</div><div class="mt">niejawne w ReAct; na L3 zakodowane w narzędziu</div></div>
+    <div class="mech"><div class="ml">Weryfikacja</div><div class="mt">schematy Pydantic i kontrole w narzędziach; agent nie widzi wyniku ewaluatora</div></div>
+    <div class="mech"><div class="ml">Komunikacja</div><div class="mt">jeden agent; narzędzia z LLM wołają ten sam model, z tym samym seedem</div></div>
+    <div class="mech"><div class="ml">Limity</div><div class="mt">100 wywołań modelu · 8192 tokeny odpowiedzi · loop guard (8 powtórzeń)</div></div>
+  </div>
+</section>
+
+<!-- 6. 11 / Narzędzia -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">11 / Narzędzia</div>
+    <h2 class="h">Trzy poziomy ziarnistości narzędzi</h2>
+    <div class="levels">
+      <div class="level">
+        <div class="caps">Poziom 1 · baseline</div>
+        <div class="ttl">12 mikro-narzędzi</div>
+        <div class="desc">agent sam planuje cały łańcuch kroków</div>
+        <ul class="tools">
+          <li>search_arxiv</li>
+          <li>search_wikipedia</li>
+          <li>download_pdf</li>
+          <li>extract_text_from_pdf</li>
+          <li>split_text_into_chunks</li>
+          <li class="llm">summarize_chunk</li>
+          <li class="llm">extract_keywords</li>
+          <li class="llm">translate_text</li>
+          <li>format_apa_citation</li>
+          <li>create_markdown_table</li>
+          <li>append_to_file</li>
+          <li>read_file</li>
+        </ul>
+      </div>
+      <div class="level blue">
+        <div class="caps">Poziom 2 · hipoteza</div>
+        <div class="ttl">4 średnie narzędzia</div>
+        <div class="desc">kroki logiczne zgrupowane w zadania</div>
+        <ul class="tools">
+          <li>search_papers</li>
+          <li class="llm">get_and_summarize_paper</li>
+          <li>write_review</li>
+          <li>append_bibliography</li>
+        </ul>
+      </div>
+      <div class="level">
+        <div class="caps">Poziom 3</div>
+        <div class="ttl">1 makro-narzędzie</div>
+        <div class="desc">cały proces w jednym wywołaniu: 10 kandydatów → 5 streszczeń → gotowy plik</div>
+        <ul class="tools">
+          <li class="llm">conduct_literature_review(query)</li>
+        </ul>
+        <div class="legend-llm" style="margin-top: 150px;"><b>*</b> narzędzie woła LLM (ten sam model)</div>
+      </div>
+    </div>
+    <div class="banner" style="margin-top: 18px;">
+      <svg viewBox="0 0 24 24"><use href="#i-warn"/></svg>
+      <div><b>Zmienna zakłócająca:</b> schematy narzędzi ≈ 4,8k / 1,8k / 0,6k znaków JSON (L1 / L2 / L3) → mierzona jako kowariata</div>
+    </div>
+  </div>
+</section>
+
+<!-- 7. 12 / Modele -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">12 / Modele</div>
+    <h2 class="h">Pięć modeli w dwóch porównaniach</h2>
+    <div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 36px; margin-top: 24px;">
+      <div>
+        <table class="tbl">
+          <thead><tr><th>Preset</th><th>Model</th><th>Parametry</th><th>Kwantyzacja</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">qwen</td><td>Qwen3.5 <span class="badge">BASELINE</span></td><td>9B</td><td>AWQ 4-bit</td></tr>
+            <tr><td class="mono">gemma</td><td>Gemma 4</td><td>12B</td><td>QAT W4A16</td></tr>
+            <tr><td class="mono">llama</td><td>Llama 3.1 Instruct</td><td>8B</td><td>AWQ INT4</td></tr>
+            <tr><td class="mono">qwen-mid</td><td>Qwen3.5</td><td>4B</td><td>BF16</td></tr>
+            <tr><td class="mono">qwen-weak</td><td>Qwen3.5</td><td>0.8B</td><td>BF16</td></tr>
+          </tbody>
+        </table>
+        <div style="font-size: 14px; color: var(--muted); margin-top: 14px;">Wszystkie: vLLM 0.33.0 · kontekst 32&nbsp;768 tokenów · RTX 5080 16 GB</div>
+      </div>
+      <div>
+        <div class="card blue">
+          <div class="caps" style="color: var(--blue);">Porównanie rodzin</div>
+          <div class="group" style="margin-top: 6px;">
+            <div class="gt">Podobny rozmiar</div>
+            <div class="chips"><span class="chip blue">Qwen3.5 9B</span><span class="chip blue">Gemma 4 12B</span><span class="chip blue">Llama 3.1 8B</span></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top: 16px;">
+          <div class="caps">Porównanie skali</div>
+          <div class="group" style="margin-top: 6px;">
+            <div class="gt">Jedna rodzina</div>
+            <div class="chips"><span class="chip">Qwen3.5 0.8B</span><span class="chip">4B</span><span class="chip">9B</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="banner" style="margin-top: 30px;">
+      <svg viewBox="0 0 24 24"><use href="#i-warn"/></svg>
+      <div><b>Uwaga:</b> 9B jest 4-bitowy, 4B i 0,8B bez kwantyzacji · wszystkie modele: top-p 0,95, top-k 20, jedno wywołanie narzędzia na turę</div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. 13 / Zmienne -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">13 / Zmienne</div>
+    <h2 class="h">Zmienne w eksperymencie</h2>
+    <div class="vars">
+      <div class="card blue">
+        <div class="caps" style="color: var(--blue);">Niezależne</div>
+        <ul class="bullets" style="margin-top: 8px;">
+          <li>poziom narzędzi (L1 / L2 / L3)</li>
+          <li>model (5)</li>
+          <li>typ zadania (bazowe / z dodatkowym wymaganiem)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="caps">Zależne</div>
+        <ul class="bullets" style="margin-top: 8px;">
+          <li>skuteczność</li>
+          <li>stabilność</li>
+          <li>koszt</li>
+          <li>elastyczność</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="caps">Kontrolowane</div>
+        <div class="chips" style="margin-top: 12px;">
+          <span class="chip">prompty</span><span class="chip">N = 5</span><span class="chip">T = 0,7 · top-p 0,95 · top-k 20</span><span class="chip">1 wywołanie / turę</span><span class="chip">limit 100 wywołań</span><span class="chip">8192 tokeny</span><span class="chip">sprzęt</span><span class="chip">wersje oprogramowania</span><span class="chip">zamrożone dane</span>
+        </div>
+      </div>
+    </div>
+    <div class="vrow">
+      <div class="callout">
+        <svg class="i"><use href="#i-refresh"/></svg>
+        <div><b>Bloki:</b> scenariusz (10) × powtórzenie (3, seed zapisywany)</div>
+      </div>
+      <div class="banner">
+        <svg viewBox="0 0 24 24"><use href="#i-warn"/></svg>
+        <div><b>Zakłócająca:</b> narzut promptu (schematy narzędzi), mierzony jako kowariata</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9. 14 / Metryki -->
+<section class="slide">
+  <div class="left" style="width: 840px;">
+    <div class="label">14 / Metryki</div>
+    <h2 class="h">Cztery osie oceny (po przeglądzie)</h2>
+    <table class="tbl mtbl" style="margin-top: 24px;">
+      <thead><tr><th>Oś</th><th>Metryka główna</th><th>Pomocnicze</th></tr></thead>
+      <tbody>
+        <tr><td>Skuteczność</td><td>success = artefakt poprawny (fakty + sędzia ≥ 4 + wymaganie) i run zakończony przez agenta</td><td class="muted">format success (10 checków), oceny sędziego, pass rate faktów</td></tr>
+        <tr><td>Stabilność</td><td>pass<sup>k</sup> (k = 1…3)</td><td class="muted">odsetek błędnych wywołań narzędzi</td></tr>
+        <tr><td>Efektywność</td><td>tokeny: agent + wnętrze narzędzi, input i output osobno</td><td class="muted">wywołania LLM i narzędzi; czas samego LLM</td></tr>
+        <tr><td>Elastyczność</td><td>success na wariantach z dodatkowym wymaganiem</td><td class="muted">—</td></tr>
+      </tbody>
+    </table>
+    <div class="card blue" style="margin-top: 18px; padding: 14px 20px;">
+      <div class="caps" style="color: var(--blue);">LLM-as-a-judge: Qwen 9B, po runach, na ślepo (bez modelu i poziomu)</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-top: 8px; font-size: 15px; color: var(--ink); line-height: 1.4;">
+        <div><b>Recenzja (1–5):</b> czy to poprawny przegląd · trafność prac względem tematu</div>
+        <div><b>Wierność (1–5):</b> 2 losowe sekcje vs początek tekstu pracy</div>
+        <div><b>Bez przeglądów:</b> tak/nie z tytułu i abstraktu każdej pracy</div>
+        <div><b>Odpowiedź:</b> same liczby w schemacie Pydantic, temperatura 0</div>
+      </div>
+      <div style="font-size: 14px; color: var(--muted); margin-top: 8px;">Fakty (ID istnieją, daty w oknie, tekst przeczytany), tabelę i język polski sprawdza kod, nie sędzia.</div>
+    </div>
+  </div>
+  <div class="panel blue-panel" style="width: 440px;">
+    <div class="panel-heading">Jakość i koszt razem</div>
+    <div class="bigword">Tokeny na sukces</div>
+    <div class="bigsub">= średnie tokeny / success rate</div>
+    <div class="bigword">Wykres Pareto</div>
+    <div class="bigsub">success vs tokeny</div>
+    <div style="font-size: 14.5px; color: var(--muted); margin-top: 36px; line-height: 1.45;">Bez ważonej sumy: wagi byłyby arbitralne.</div>
+  </div>
+</section>
+
+<!-- 10. 15 / Plan eksperymentów -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">15 / Plan eksperymentów</div>
+    <h2 class="h">Hipotezy i układ eksperymentu</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 12px;">
+      <div>
+        <div class="hyp"><div class="hl">H1a</div><div class="ht">„Na zadaniach bazowych L2 osiąga success nie niższy niż L1 przy mniejszej liczbie tokenów na sukces.”</div></div>
+        <div class="hyp"><div class="hl">H1b</div><div class="ht">„Na zadaniach z dodatkowym wymaganiem L2 osiąga wyższy success niż L3.”</div></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px;">
+          <div class="card" style="padding: 14px 18px;"><div class="caps">RQ2</div><div style="font-size: 16px; color: var(--ink); margin-top: 5px; line-height: 1.4;">rodziny modeli o podobnym rozmiarze</div></div>
+          <div class="card" style="padding: 14px 18px;"><div class="caps">RQ3</div><div style="font-size: 16px; color: var(--ink); margin-top: 5px; line-height: 1.4;">skala w obrębie jednej rodziny</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="card blue" style="margin-top: 14px;">
+          <div class="caps" style="color: var(--blue);">Układ</div>
+          <div class="formula">5 × 3 × 10 × 3</div>
+          <div style="font-size: 15px; color: var(--text); margin-top: 2px;">modeli × poziomy × scenariusze × powtórzenia</div>
+          <div style="font-size: 17px; color: var(--ink); margin-top: 10px; line-height: 1.45;"><b>450</b> przebiegów bazowych + <b>450</b> z dodatkowym wymaganiem</div>
+        </div>
+        <div style="margin-top: 16px;">
+          <div class="caps">Dodatkowe wymaganie: jedno z 3 na scenariusz (4 / 3 / 3), te same narzędzia · H1b = L2 − L3 na wariantach</div>
+          <div class="chips" style="margin-top: 9px;"><span class="chip">tabela porównawcza</span><span class="chip">streszczenia po polsku</span><span class="chip">bez prac przeglądowych</span></div>
+        </div>
+        <div class="irow plain" style="margin-top: 16px; align-items: center;"><svg class="i"><use href="#i-shuffle"/></svg><div><span style="margin-top: 0; font-size: 16px;">Kolejność poziomów losowana w każdym bloku.</span></div></div>
+        <div class="irow plain" style="margin-top: 10px; align-items: center;"><svg class="i"><use href="#i-chart"/></svg><div><span style="margin-top: 0; font-size: 16px;"><b style="display: inline; font-size: 16px;">Analiza:</b> Wilson, przedział t i test permutacyjny po scenariuszach, H1a jako non-inferiority (15 pp) z Holmem.</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. 16 / Screen diagnostyczny -->
+<section class="slide">
+  <div class="left" style="width: 820px;">
+    <div class="label">16 / Screen diagnostyczny</div>
+    <h2 class="h">Co pokazał screen na RTX 5080</h2>
+    <div style="font-size: 17px; color: var(--muted); margin-top: 10px;">150 przebiegów · 5 modeli × 3 poziomy × 10 scenariuszy · 1 powtórzenie · tylko diagnostyka</div>
+    <ul class="bullets" style="margin-top: 22px;">
+      <li style="font-size: 18px; margin-top: 14px;"><b>L3 zalicza z konstrukcji:</b> nagłówki, cytowania i bibliografię pisze kod → 50/50 przebiegów L3 z kompletem checków, także llama i model 0,8B</li>
+      <li style="font-size: 18px; margin-top: 14px;"><b>Recenzja nie na temat dostała 1,0:</b> zapytanie „arXiv 2310” zamiast modeli dyfuzyjnych → matematyka i QCD</li>
+      <li style="font-size: 18px; margin-top: 14px;"><b>Fałszywe porażki formatu:</b> 5 dobrych, przeczytanych prac i score 0,1, bo nagłówki <code>###</code></li>
+      <li style="font-size: 18px; margin-top: 14px;"><b>Nierówne warunki:</b> różne top-p/top-k i kwantyzacja, równoległe wywołania tylko poza llamą, L1 po cichu czytał 6 000 znaków pracy</li>
+    </ul>
+  </div>
+  <div class="panel blue-panel" style="width: 460px;">
+    <div class="panel-heading">Wniosek</div>
+    <ul class="bullets" style="margin-top: 14px;">
+      <li style="font-size: 17px; margin-top: 16px;">10 checków mierzy <b>format i pochodzenie</b>, nie jakość recenzji</li>
+      <li style="font-size: 17px; margin-top: 16px;">4 niezależnych recenzentów + weryfikator: 13/15 ustaleń potwierdzonych, 2 częściowo</li>
+      <li style="font-size: 17px; margin-top: 16px;">liczby ze screena nie trafiają do pracy</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 11b. 17 / Zmiany protokołu -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">17 / Zmiany protokołu</div>
+    <h2 class="h">Poprawki przed pełnym eksperymentem</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 18px;">
+      <div class="card blue">
+        <div class="caps" style="color: var(--blue);">Protokół (przed runem)</div>
+        <ul class="bullets" style="margin-top: 8px;">
+          <li>jednakowe top-p/top-k, 1 wywołanie na turę, Qwen 4B w BF16</li>
+          <li>prompt opisuje wynik, nie kroki; L3 mówi „zadanie wykonane”</li>
+          <li>widoczny znacznik obcięcia, licznik znaków przeczytanych na pracę</li>
+          <li>L2/L3: jedno streszczenie zamiast sklejki 6 fragmentów</li>
+          <li>L1: <code>write_file</code> zamiast dopisywania</li>
+          <li>prewarm cache, brakujące PDF-y w cache, ponawianie samego scoringu</li>
+          <li>hash konfiguracji obejmuje serwowany model</li>
+        </ul>
+      </div>
+      <div>
+        <div class="card">
+          <div class="caps">Warianty zadań (H1b)</div>
+          <div style="font-size: 16px; color: var(--ink); margin-top: 6px; line-height: 1.45;">10 wariantów: tabela · po polsku · bez prac przeglądowych (4/3/3)</div>
+        </div>
+        <div class="card" style="margin-top: 14px;">
+          <div class="caps">Nowa ocena</div>
+          <div style="font-size: 16px; color: var(--ink); margin-top: 6px; line-height: 1.45;">fakty z całego pliku · sędzia LLM (Qwen 9B, na ślepo, same liczby) · format osobno · dwie osie: jakość artefaktu i niezawodność agenta</div>
+        </div>
+        <div class="card" style="margin-top: 14px;">
+          <div class="caps">Analiza</div>
+          <div style="font-size: 16px; color: var(--ink); margin-top: 6px; line-height: 1.45;">H1a jako non-inferiority (margines 15 pp) z korektą Holma · tokeny w skali log · interakcje model × poziom</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11c. 18 / Pierwsze wyniki: qwen-mid -->
+<section class="slide">
+  <div class="left" style="width: 800px;">
+    <div class="label">18 / Pierwsze wyniki</div>
+    <h2 class="h">Pełny protokół na jednym modelu: Qwen 4B</h2>
+    <div style="font-size: 17px; color: var(--muted); margin-top: 10px;">180 przebiegów · 10 scenariuszy × 2 typy zadań × 3 poziomy × 3 powtórzenia · RTX 5080 · sędzia Qwen 9B</div>
+    <table class="tbl mtbl" style="margin-top: 22px;">
+      <thead><tr><th></th><th>L1</th><th>L2</th><th>L3</th></tr></thead>
+      <tbody>
+        <tr><td>success: zadania bazowe</td><td>100%</td><td>90%</td><td>90%</td></tr>
+        <tr><td>success: z wymaganiem</td><td>93%</td><td>80%</td><td>27%</td></tr>
+        <tr><td class="muted">format success: bazowe / z wymaganiem</td><td class="muted">93% / 77%</td><td class="muted">97% / 97%</td><td class="muted">100% / 100%</td></tr>
+        <tr><td>tokeny na przebieg (bazowe)</td><td>338k</td><td>85k</td><td>35k</td></tr>
+      </tbody>
+    </table>
+    <div style="font-size: 15px; color: var(--muted); margin-top: 16px; line-height: 1.45;">L3 spełnia „tabelę” i „po polsku” w 0% przebiegów; „bez prac przeglądowych” w 89%, bo losowe prace rzadko są przeglądami.</div>
+  </div>
+  <div class="panel blue-panel" style="width: 480px;">
+    <div class="panel-heading">Hipotezy (tylko ten model)</div>
+    <ul class="bullets" style="margin-top: 14px;">
+      <li style="font-size: 17px; margin-top: 14px;"><b>H1a nie potwierdzona:</b> L2 − L1 = −10 pp [−22; +2], margines 15 pp nie wykluczony; tokeny na sukces 0,28× L1</li>
+      <li style="font-size: 17px; margin-top: 14px;"><b>H1b potwierdzona:</b> L2 − L3 = +53 pp [+19; +87], p = 0,016</li>
+      <li style="font-size: 17px; margin-top: 14px;">L3 tani i bezbłędny w formacie, ale nie dostosowuje się do wymagań</li>
+      <li style="font-size: 17px; margin-top: 14px;"><b>Ograniczenia:</b> 1 model, 10 scenariuszy; sędzia łagodny (średnio 4,1–5,0)</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 12. 19 / Stan i następne kroki -->
+<section class="slide">
+  <div class="pad">
+    <div class="label">19 / Stan i następne kroki</div>
+    <h2 class="h">Stan implementacji i następne kroki</h2>
+    <div class="status">
+      <div class="done">
+        <div class="card-title">Gotowe</div>
+        <ul>
+          <li><svg class="i"><use href="#i-check"/></svg>agent ReAct</li>
+          <li><svg class="i"><use href="#i-check"/></svg>3 poziomy narzędzi</li>
+          <li><svg class="i"><use href="#i-check"/></svg>ewaluator z 10 checkami</li>
+          <li><svg class="i"><use href="#i-check"/></svg>runner z powtórzeniami</li>
+          <li><svg class="i"><use href="#i-check"/></svg>MLflow</li>
+          <li><svg class="i"><use href="#i-check"/></svg>5 presetów vLLM</li>
+          <li><svg class="i"><use href="#i-check"/></svg>loop guard, paski postępu</li>
+          <li><svg class="i"><use href="#i-check"/></svg>screen 150 przebiegów + przegląd metodologii</li>
+          <li><svg class="i"><use href="#i-check"/></svg>poprawki protokołu, warianty zadań</li>
+          <li><svg class="i"><use href="#i-check"/></svg>sędzia LLM i nowa analiza</li>
+          <li><svg class="i"><use href="#i-check"/></svg>pełny run Qwen 4B (180 przebiegów)</li>
+        </ul>
+      </div>
+      <div class="card next">
+        <div class="card-title">Następne</div>
+        <ol>
+          <li><span>run pozostałych 4 modeli (720 przebiegów)</span></li>
+          <li><span>sędzia i analiza dla wszystkich modeli</span></li>
+          <li><span>wyniki i dyskusja w pracy</span></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

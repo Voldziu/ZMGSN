@@ -1,19 +1,22 @@
 """Workspace-based paper operations. Level 1 tools call them one by one; levels 2-3 chain them."""
 
 import shutil
+from pathlib import Path
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, ConfigDict
 
 from tool_eval.config import Settings
-from tool_eval.exceptions import InvalidInputError
+from tool_eval.exceptions import InvalidInputError, PaperNotFoundError, ToolEvalError
 from tool_eval.prompts import load_prompt
 from tool_eval.services import llm_ops
-from tool_eval.services.arxiv import validate_arxiv_id
+from tool_eval.services.arxiv import fetch_arxiv_papers, validate_arxiv_id
+from tool_eval.services.network import count_network_request
 from tool_eval.services.pdf import download_arxiv_pdf, extract_pdf_text
+from tool_eval.services.reading import record_text_read, write_chunk_index
 from tool_eval.utils.logger import get_logger
 from tool_eval.utils.paths import resolve_in_workspace, to_ref
-from tool_eval.utils.text import read_text, split_text, write_text
+from tool_eval.utils.text import read_text, split_spans, write_text
 
 logger = get_logger(__name__)
 
@@ -47,17 +50,49 @@ def download_paper_pdf(arxiv_id: str, *, settings: Settings) -> str:
     )
     cache = settings.pdf_cache_dir
     source = dest if cache is None else cache / dest.name
+    missing = None if cache is None else cache / f"{dest.stem}.missing"
+    if missing is not None and missing.is_file():
+        raise PaperNotFoundError(missing.read_text(encoding="utf-8"))
     if not source.is_file():
-        download_arxiv_pdf(
-            cleaned,
-            dest=source,
-            timeout=settings.http_timeout_seconds,
-            max_bytes=settings.max_pdf_bytes,
-        )
+        try:
+            _download(cleaned, dest=source, settings=settings)
+        except PaperNotFoundError as exc:
+            if missing is not None:
+                missing.parent.mkdir(parents=True, exist_ok=True)
+                missing.write_text(str(exc), encoding="utf-8")
+            raise
     if source != dest:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, dest)
     return to_ref(dest, workspace=settings.workspace_dir)
+
+
+def _download(arxiv_id: str, *, dest: Path, settings: Settings) -> None:
+    """Download a PDF; on 404 try once more at the paper's latest version."""
+    try:
+        count_network_request("pdf_downloads")
+        download_arxiv_pdf(
+            arxiv_id,
+            dest=dest,
+            timeout=settings.http_timeout_seconds,
+            max_bytes=settings.max_pdf_bytes,
+        )
+    except PaperNotFoundError as not_found:
+        try:
+            found = fetch_arxiv_papers([arxiv_id], timeout=settings.http_timeout_seconds)
+        except ToolEvalError:
+            raise not_found from None
+        version = found[0].version if found else None
+        if version is None:
+            raise
+        count_network_request("pdf_downloads")
+        download_arxiv_pdf(
+            arxiv_id,
+            dest=dest,
+            timeout=settings.http_timeout_seconds,
+            max_bytes=settings.max_pdf_bytes,
+            version=version,
+        )
 
 
 def extract_paper_text(pdf_ref: str, *, settings: Settings) -> str:
@@ -103,20 +138,21 @@ def split_paper_text(text_ref: str, *, settings: Settings) -> list[str]:
 def _split_paper_text(text_ref: str, *, settings: Settings) -> tuple[list[str], int]:
     workspace = settings.workspace_dir
     source = resolve_in_workspace(text_ref, workspace=workspace)
-    chunks = split_text(
-        read_text(source, max_bytes=settings.max_file_bytes),
-        chunk_size=settings.chunk_size,
-    )
+    text = read_text(source, max_bytes=settings.max_file_bytes)
+    spans = split_spans(text, chunk_size=settings.chunk_size)
     refs: list[str] = []
-    for number, chunk in enumerate(chunks[: settings.pipeline_max_chunks], start=1):
+    index: dict[str, tuple[int, int]] = {}
+    for number, (start, end) in enumerate(spans[: settings.pipeline_max_chunks], start=1):
         dest = resolve_in_workspace(f"chunks/{source.stem}/{number:04d}.txt", workspace=workspace)
-        write_text(dest, chunk, max_bytes=settings.max_file_bytes)
+        write_text(dest, text[start:end], max_bytes=settings.max_file_bytes)
         refs.append(to_ref(dest, workspace=workspace))
-    return refs, len(chunks)
+        index[dest.name] = (start, end)
+    write_chunk_index(resolve_in_workspace(f"chunks/{source.stem}", workspace=workspace), index)
+    return refs, len(spans)
 
 
 def summarize_chunk_file(chunk_ref: str, *, settings: Settings, llm: BaseChatModel) -> str:
-    """Summarize one text file with the LLM.
+    """Summarize one chunk (a text file of at most `chunk_size` characters) with the LLM.
 
     Args:
         chunk_ref: Workspace-relative path of the text file.
@@ -125,9 +161,19 @@ def summarize_chunk_file(chunk_ref: str, *, settings: Settings, llm: BaseChatMod
 
     Returns:
         The summary.
+
+    Raises:
+        InvalidInputError: If the file is longer than one chunk; nothing is sent to the model.
     """
     path = resolve_in_workspace(chunk_ref, workspace=settings.workspace_dir)
     text = read_text(path, max_bytes=settings.max_file_bytes)
+    if len(text) > settings.chunk_size:
+        msg = (
+            f"This file has {len(text)} characters; a chunk holds at most {settings.chunk_size}. "
+            "Split it with split_text_into_chunks and summarize the chunks."
+        )
+        raise InvalidInputError(msg)
+    record_text_read(path, workspace=settings.workspace_dir, kept=len(text))
     prompt = load_prompt("summarize_chunk", settings.prompt_version)
     return llm_ops.summarize(text, llm=llm, prompt=prompt, max_chars=settings.text_max_chars)
 
@@ -152,6 +198,8 @@ def keywords_from_file(
     """
     path = resolve_in_workspace(text_ref, workspace=settings.workspace_dir)
     text = read_text(path, max_bytes=settings.max_file_bytes)
+    kept = min(len(text), settings.text_max_chars)
+    record_text_read(path, workspace=settings.workspace_dir, kept=kept)
     prompt = load_prompt("extract_keywords", settings.prompt_version)
     return llm_ops.extract_keywords(
         text,
@@ -190,6 +238,7 @@ def translate_file(
     workspace = settings.workspace_dir
     source = resolve_in_workspace(text_ref, workspace=workspace)
     text = read_text(source, max_bytes=settings.max_file_bytes)
+    record_text_read(source, workspace=workspace, kept=min(len(text), settings.text_max_chars))
     prompt = load_prompt("translate_text", settings.prompt_version)
     translated = llm_ops.translate(
         text,
@@ -207,7 +256,7 @@ def translate_file(
 
 
 def summarize_paper(arxiv_id: str, *, settings: Settings, llm: BaseChatModel) -> PaperSummary:
-    """Download a paper, extract and split its text, and summarize its leading chunks.
+    """Download a paper, summarize its leading chunks and combine them into one summary.
 
     Args:
         arxiv_id: arXiv identifier.
@@ -224,7 +273,8 @@ def summarize_paper(arxiv_id: str, *, settings: Settings, llm: BaseChatModel) ->
         settings=settings,
     )
     parts = [summarize_chunk_file(ref, settings=settings, llm=llm) for ref in chunk_refs]
-    summary = "\n\n".join(parts)
+    prompt = load_prompt("synthesize_summary", settings.prompt_version)
+    summary = llm_ops.synthesize(parts, llm=llm, prompt=prompt)
     dest = resolve_in_workspace(
         f"summaries/{paper_file_stem(cleaned)}.md",
         workspace=settings.workspace_dir,

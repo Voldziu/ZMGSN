@@ -19,16 +19,17 @@ def build_chat_model(settings: Settings) -> ChatOpenAI:
     # Read by the Qwen3.5 / Gemma 4 chat templates; ignored by templates without thinking.
     extra_body: dict[str, Any] = {
         "chat_template_kwargs": {"enable_thinking": settings.llm_enable_thinking},
-    }
-    parallel = settings.effective_parallel_tool_calls
-    if parallel is not None:
         # vLLM keeps only the first tool call of a reply when this is false.
-        extra_body["parallel_tool_calls"] = parallel
+        "parallel_tool_calls": settings.effective_parallel_tool_calls,
+        # Not part of the OpenAI API; vLLM reads it from the request body.
+        "top_k": settings.llm_top_k,
+    }
     return ChatOpenAI(
         model=settings.llm_model,
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
         temperature=settings.agent_temperature,
+        top_p=settings.llm_top_p,
         max_completion_tokens=settings.llm_max_tokens,
         # vLLM otherwise samples deterministically from server start, so repeat n of a session
         # would reproduce exactly after every restart.

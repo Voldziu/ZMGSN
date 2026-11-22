@@ -3,17 +3,20 @@
 from langchain_core.tools import tool
 
 from tool_eval.config import get_settings
+from tool_eval.services.reading import record_text_read
 from tool_eval.utils.paths import require_text_suffix, resolve_in_workspace, to_ref
-from tool_eval.utils.text import append_text, read_text, truncate
+from tool_eval.utils.text import read_text, truncate, write_text
 
 
 @tool(parse_docstring=True)
-def append_to_file(path: str, content: str) -> str:
-    """Append text to a Markdown or text file in the workspace, creating it if needed.
+def write_file(path: str, content: str) -> str:
+    """Write a Markdown or text file in the workspace, replacing whatever it contained.
+
+    Pass the whole content every time; to fix something, write the corrected full text again.
 
     Args:
         path: Workspace-relative path ending in .md or .txt.
-        content: Text to append.
+        content: The complete file content.
 
     Returns:
         Confirmation with the file path.
@@ -21,10 +24,8 @@ def append_to_file(path: str, content: str) -> str:
     settings = get_settings()
     target = resolve_in_workspace(path, workspace=settings.workspace_dir)
     require_text_suffix(target)
-    append_text(target, content, max_bytes=settings.max_file_bytes)
-    return (
-        f"Appended {len(content)} characters to {to_ref(target, workspace=settings.workspace_dir)}"
-    )
+    write_text(target, content, max_bytes=settings.max_file_bytes)
+    return f"Wrote {len(content)} characters to {to_ref(target, workspace=settings.workspace_dir)}"
 
 
 @tool(parse_docstring=True)
@@ -35,10 +36,13 @@ def read_file(path: str) -> str:
         path: Workspace-relative path ending in .md or .txt.
 
     Returns:
-        The file contents, cut to the configured maximum length.
+        The file contents; a long file is cut, and the cut is marked with the number of
+        characters shown and the total.
     """
     settings = get_settings()
     target = resolve_in_workspace(path, workspace=settings.workspace_dir)
     require_text_suffix(target)
     text = read_text(target, max_bytes=settings.max_file_bytes)
+    kept = min(len(text), settings.text_max_chars)
+    record_text_read(target, workspace=settings.workspace_dir, kept=kept)
     return truncate(text, max_chars=settings.text_max_chars)
