@@ -536,11 +536,11 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
 <section class="slide">
   <div class="left" style="width: 840px;">
     <div class="label">14 / Metryki</div>
-    <h2 class="h">Cztery osie oceny</h2>
+    <h2 class="h">Cztery osie oceny (po przeglądzie)</h2>
     <table class="tbl mtbl" style="margin-top: 24px;">
       <thead><tr><th>Oś</th><th>Metryka główna</th><th>Pomocnicze</th></tr></thead>
       <tbody>
-        <tr><td>Skuteczność</td><td>success = status <code>completed</code> i 10/10 checków</td><td class="muted">score, pass rate każdego checku</td></tr>
+        <tr><td>Skuteczność</td><td>success = artefakt poprawny (fakty + sędzia ≥ 4 + wymaganie) i run zakończony przez agenta</td><td class="muted">format success (10 checków), oceny sędziego, pass rate faktów</td></tr>
         <tr><td>Stabilność</td><td>pass<sup>k</sup> (k = 1…3)</td><td class="muted">odsetek błędnych wywołań narzędzi</td></tr>
         <tr><td>Efektywność</td><td>tokeny: agent + wnętrze narzędzi, input i output osobno</td><td class="muted">wywołania LLM i narzędzi; czas samego LLM</td></tr>
         <tr><td>Elastyczność</td><td>success na wariantach z dodatkowym wymaganiem</td><td class="muted">—</td></tr>
@@ -583,7 +583,7 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
           <div class="chips" style="margin-top: 9px;"><span class="chip">tabela porównawcza</span><span class="chip">streszczenia po polsku</span><span class="chip">bez prac przeglądowych</span></div>
         </div>
         <div class="irow plain" style="margin-top: 16px; align-items: center;"><svg class="i"><use href="#i-shuffle"/></svg><div><span style="margin-top: 0; font-size: 16px;">Kolejność poziomów losowana w każdym bloku.</span></div></div>
-        <div class="irow plain" style="margin-top: 10px; align-items: center;"><svg class="i"><use href="#i-chart"/></svg><div><span style="margin-top: 0; font-size: 16px;"><b style="display: inline; font-size: 16px;">Analiza:</b> przedziały Wilsona, bootstrap po scenariuszach, pass<sup>k</sup>.</span></div></div>
+        <div class="irow plain" style="margin-top: 10px; align-items: center;"><svg class="i"><use href="#i-chart"/></svg><div><span style="margin-top: 0; font-size: 16px;"><b style="display: inline; font-size: 16px;">Analiza:</b> Wilson, przedział t i test permutacyjny po scenariuszach, H1a jako non-inferiority (15 pp) z Holmem.</span></div></div>
       </div>
     </div>
   </div>

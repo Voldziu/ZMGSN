@@ -148,14 +148,42 @@ Tools, prompts and text limits (prompt version `v3`, tool set version 4):
 - **Level 3** states in its result that the review is complete (or how many papers are missing) and starts each call from a clean workspace.
 - **Cut text is marked:** `read_file`, keywords and translation show at most 6,000 characters and end with `[cut: showing N of M characters]`. `summarize_chunk` refuses input longer than one chunk (3,000 characters) and asks the agent to split it first.
 
-A run is successful only if it completed (it neither hit the step limit, nor was stopped by the loop guard, nor failed) and every check passes, including `papers_read`: every paper cited in the review must have had its full text extracted in that run's workspace (`texts/<id>.txt`). Reviews written from search results or abstracts fail it. Runs that hit the step limit, ended as `loop` or failed keep their score (the fraction of passed checks) as partial credit. Each record stores the verdict as `success`; `outcome.success` only says whether every check passed. The report applies the rule to older results files too.
+Each run is scored three ways (checks version 3):
+- **Format checks** (`outcome.criteria`): the ten structural checks, among them `papers_read`. They parse sections from `## ` headings and expect exact APA lines, so they measure format compliance. At level 3 the code writes the format, so it passes them by construction. `format success` = completed and all ten pass; it is stored as `success`, the original rule.
+- **Fact checks** (`outcome.facts`): computed on every arXiv id anywhere in the file, whatever the formatting:
+  - `papers_cited`: at least N distinct papers;
+  - `cited_ids_exist`;
+  - `cited_in_window`;
+  - `text_extracted`: `texts/<id>.txt` exists in the run's workspace.
+- **Requirement** (`outcome.requirement`, variants only):
+  - `table`: a Markdown table between the title and the first paper section, with every cited paper in a row;
+  - `polish`: every summary detected as Polish by `langdetect`, ignoring titles, references and URLs;
+  - `no_surveys`: decided by the judge.
+
+**LLM judge**, run after the runs:
+- Start the judge model and run `make judge PRESETS="…" JUDGE=qwen` (`tool_eval.main judge results/presets-<model>.jsonl`).
+- It rates every scored review on 1–5 for three things: a valid review (one section and summary per paper); the relevance of the papers to the topic; and the faithfulness of two seeded summaries against the paper's extracted text.
+- For `no_surveys` variants it also decides survey or not for each cited paper, from the arXiv title and abstract.
+- The judge does not see the model, level or run id. It uses temperature 0 and seed 0, and its answers are constrained to schemas of numbers and booleans; an answer that does not fit is retried once and then stored as missing.
+- Judgments go to `results/presets-<model>.judge.jsonl`. A rerun skips runs already judged with the same judge configuration.
+
+**Outcomes** of a run:
+- **Artifact valid:** all fact checks pass, every judge rating is ≥ 4, and a variant meets its requirement. This holds whatever the run's status.
+- **Reliable:** the agent ended the run itself (`completed`).
+- **Success:** both of the above.
+
+Artifact validity stays undefined until the run is judged.
+
+`tool_eval.main rescore results/presets-<model>.jsonl` recomputes the format, fact and table/Polish checks from the saved workspaces (`workspace/preset-runs/<model>/`) into `presets-<model>.rescored.jsonl`, leaving the original untouched.
 
 ## Report
 
 `report FILE...` combines results files, for example one per model, and summarises every model and level. Base tasks and variants get separate reports in one document and are never pooled; level differences pair scenarios of one task type, and the variant report adds the success rate by requirement. It uses the scored runs: every run except those with an infrastructure error. It stops if a run of one model appears twice, whatever its configuration: a file passed twice, or two results files of the same model such as `smoke-qwen.jsonl` and `presets-qwen.jsonl`. The error names the run and both files. It warns when one model's runs come from different configurations. A value without data, such as the success rate of a level whose runs all ended in errors or repeatability with one repeat, is undefined (`-`), not zero. Sections:
 
-- **Overview:** the success rate with its 95% Wilson interval, per model × level.
-- **Quality:** successes, mean score, and runs that hit the step limit, were stopped by the loop guard (`loop`), failed or had errors.
+- **Outcomes:** success, artifact validity, reliability and format success with 95% Wilson intervals, and the number of judged runs.
+- **Judge ratings and fact checks:** mean ratings and the pass rate of each fact check.
+- **Overview:** the format-success rate with its 95% Wilson interval, per model × level.
+- **Quality (format checks):** format successes, mean score, and runs that hit the step limit, were stopped by the loop guard (`loop`), failed or had errors.
 - **Stability:** pass^k for k = 1..10. For each scenario it is C(c,k)/C(n,k), with c successes in n scored runs, averaged over scenarios. It is undefined above the fewest scored runs of any scenario.
 - **Tool calls:** the tool-error rate (per tool call), split into environment and agent errors; the malformed-call rate (per attempted call: tool calls plus malformed calls); malformed calls and text tool calls per run.
 - **Cost and time:** means per run of:
@@ -165,7 +193,15 @@ A run is successful only if it completed (it neither hit the step limit, nor was
   - LLM calls, and model and tool time;
   - wall time;
   - characters read per paper, and cache misses.
-- **Level differences:** later level minus earlier level within each model, in success rate and tokens. Each difference is the mean of the per-scenario differences over the scenarios both levels share, so every scenario weighs the same even when a level has unretried errors. Each has a 95% interval from a cluster bootstrap over scenarios (10,000 resamples, seeded, so reports are reproducible); `*` marks an interval that excludes zero.
+- **Level differences:** later level minus earlier level within each model and task type, for every outcome and for tokens.
+  - Outcomes are the mean of the per-scenario differences, with a 95% t-interval (df = scenarios − 1) and an exact sign-flip permutation p-value. Every scenario weighs the same.
+  - Tokens are compared as geometric-mean ratios, for all runs and for completed runs.
+  - Tokens per success are a ratio with a scenario-bootstrap BCa interval; "not evaluable" when a level has no success.
+  - When both levels are at 100% or 0% in every scenario, the comparison is labelled "both at ceiling" or "both at floor" instead of getting an interval.
+- **H1a:** per model, level 2 against level 1 on base tasks. Success must be non-inferior with a 15 pp margin, and cost per success must be lower; the two p-values are combined by taking the larger, then Holm-corrected across models.
+- **H1b:** level 2 against level 3 on the variants.
+- **Interactions:** for each pair of models, the difference of their level differences, with a bootstrap over shared scenarios.
+- **Excluded runs:** infrastructure errors per cell, and the success rate with them counted as failures.
 - **Checks:** the pass rate of each check.
 - **Further tables:** repeatability and consistency, per scenario, and the failed and error runs.
 

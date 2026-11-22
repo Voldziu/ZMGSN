@@ -47,13 +47,13 @@
 
 ## 6. Docs, paper and presentation
 
-- [ ] 6.1 `README.md`: the three outcomes, the fact checks, `judge`, `rescore` and the report sections.
-- [ ] 6.2 `docs/overleaf/methods.tex`, evaluation section:
+- [x] 6.1 `README.md`: the three outcomes, the fact checks, `judge`, `rescore` and the report sections.
+- [x] 6.2 `docs/overleaf/methods.tex`, evaluation section:
   - the fact checks;
   - the requirement checks;
   - the judge (model, blinding, scales, threshold, structured output, determinism, self-preference limitation);
   - the three outcomes and format compliance.
-- [ ] 6.3 `docs/overleaf/experiment_plan.tex`:
+- [x] 6.3 `docs/overleaf/experiment_plan.tex`:
   - primary outcome and family;
   - H1a non-inferiority (δ = 15 pp) with the cost criterion and Holm;
   - H1b on variants;
@@ -63,7 +63,7 @@
   - tokens per success with BCa;
   - excluded runs and sensitivity;
   - everything else exploratory.
-- [ ] 6.4 `docs/presentations/src/progress-6-7.html`: a slide on the new metrics (facts, judge, two axes) and the analysis plan. Regenerate the PDF.
+- [x] 6.4 `docs/presentations/src/progress-6-7.html`: a slide on the new metrics (facts, judge, two axes) and the analysis plan. Regenerate the PDF.
 
 ## 7. Verification
 

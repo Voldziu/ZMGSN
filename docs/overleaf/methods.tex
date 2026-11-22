@@ -124,7 +124,15 @@ We evaluate five open-weight, instruction-tuned models (Table~\ref{tab:models}) 
 \subsection{Outcome evaluation}
 \label{sec:evaluation}
 
-After the agent stops, a deterministic evaluator scores \texttt{reviews/review.md} with the ten binary checks of Table~\ref{tab:checks}. Checks that need facts about the cited papers (existence, title, first-version submission date) look them up on arXiv by identifier, through the cache; no LLM acts as a judge. The evaluator does not assess the quality or the topical relevance of the summaries. It verifies the structure, the references, the facts that can be checked mechanically and whether the text of every cited paper was extracted in the run.
+After the agent stops, \texttt{reviews/review.md} is scored in three layers, because a single set of format checks proved both too strict and too blind (Section~\ref{sec:protocol-changes}): at Level~3 the code writes the format, so every Level~3 review passed it, including one on an unrelated topic, while reviews of five correct, read papers failed nine of ten checks over a heading level.
+
+\paragraph{Format checks.} The ten binary checks of Table~\ref{tab:checks} verify the required structure and references; they parse paper sections from second-level headings and expect exact APA lines. We report them as \emph{format compliance}.
+
+\paragraph{Fact checks.} Four checks take every arXiv identifier anywhere in the file, whatever its formatting, and verify facts that need no interpretation: at least $N$ distinct papers are cited, every identifier exists, every paper was submitted within the window, and the text of every cited paper was extracted in the run's own workspace. Facts about papers are looked up on arXiv through the cache.
+
+\paragraph{Requirement checks.} For a variant, the \texttt{table} requirement passes when a Markdown table between the title and the first paper section has a row for every cited paper (by title or identifier), and the \texttt{polish} requirement when the summary text of every paper section, without titles, references and URLs, is detected as Polish (\texttt{langdetect}, fixed seed). The \texttt{no\_surveys} requirement is decided by the judge.
+
+\paragraph{LLM judge.} After all runs, Qwen3.5-9B, served like the evaluated models, rates every scored review on three 1--5 scales with short anchored rubrics: whether it is a valid review with one section and summary per paper, whether the papers fit the topic, and the faithfulness of two summaries, chosen with a seed derived from the run, against the first 12{,}000 characters of the paper's extracted text. For \texttt{no\_surveys} variants it also decides, from each cited paper's arXiv title and abstract, whether the paper is a survey. The judge sees neither the model, the level nor the run; it samples with temperature 0 and a fixed seed, and its answers are constrained by guided decoding to schemas that contain only integers or booleans, without justifications; an answer that does not fit is retried once and otherwise recorded as missing. The judge is also one of the evaluated models, so it may favour its own style; blinding reduces this risk but cannot remove it, and the judgments were not validated against human ratings.
 
 \begin{table}[t]
   \caption{Binary checks applied to the review file. If the file is missing, all checks fail.}
@@ -149,7 +157,7 @@ After the agent stops, a deterministic evaluator scores \texttt{reviews/review.m
   \end{tabularx}
 \end{table}
 
-A run is a \emph{success} if it completed---it neither hit the step limit, nor was stopped as a loop, nor failed---and passed all ten checks. Its \emph{score} is the fraction of passed checks; it is computed for every scored run, including runs that hit the step limit, were stopped as a loop or failed, and gives partial credit. Runs with an infrastructure error are excluded from all metrics and repeated.
+\paragraph{Outcomes.} Each run has two outcome axes. Its review is \emph{artifact valid} when every fact check passes, every judge rating is at least 4 and a variant meets its requirement, whatever the run's status. The run is \emph{reliable} when the agent ended it itself (it neither hit the step limit, nor was stopped as a loop, nor failed). A \emph{success} is both. The original rule---completed and all ten format checks passed---is kept as \emph{format success}, and the \emph{score} is the fraction of passed format checks. Runs with an infrastructure error are excluded from all metrics and repeated.
 
 \subsection{Cost measurement}
 \label{sec:cost}
