@@ -12,7 +12,13 @@ from dotenv import load_dotenv
 
 from tool_eval.config import get_settings
 from tool_eval.evaluation.checks import ArxivLookup
-from tool_eval.evaluation.judge import chat_ask, judge_hash, judge_results
+from tool_eval.evaluation.judge import (
+    chat_ask,
+    judge_hash,
+    judge_results,
+    judgment_file,
+    load_judgments,
+)
 from tool_eval.evaluation.models import Scenario
 from tool_eval.evaluation.report import (
     load_records,
@@ -256,10 +262,12 @@ def _report(args: argparse.Namespace) -> int:
         msg = f"Results file not found: {', '.join(missing)}"
         raise InvalidInputError(msg)
     records = load_results(args.inputs)
+    # Judgments written by `judge` next to each results file are picked up automatically.
+    judgments = [j for path in args.inputs for j in load_judgments(judgment_file(path))]
     # The report is the program's output, so it goes to stdout rather than the log.
-    print(render_markdown(records))  # noqa: T201
+    print(render_markdown(records, judgments))  # noqa: T201
     if args.csv:
-        write_csv(summarize(records), args.csv)
+        write_csv(summarize(records, judgments), args.csv)
         logger.info("Wrote %s", args.csv)
     return 0
 

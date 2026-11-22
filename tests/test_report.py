@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 
 from test_evaluation import _record
+from tool_eval.evaluation.analysis import compare_levels
 from tool_eval.evaluation.models import CriterionResult, OutcomeScore, RunRecord, RunStatus
 from tool_eval.evaluation.report import (
-    compare_levels,
     load_results,
     render_markdown,
     summarize,
@@ -170,8 +170,8 @@ def test_level_with_only_errors_has_undefined_rates_and_means(tmp_path: Path) ->
         assert getattr(errors_only, name) is None, name
 
     text = render_markdown(records)
-    [quality] = [line for line in text.splitlines() if line.startswith("| qwen | level1 | 0 | 0 |")]
-    assert quality == "| qwen | level1 | 0 | 0 | - | - | - | 0 | 0 | 0 | 1 |"
+    assert "| qwen | level1 | 0 | 0 | - | - | - | 0 | 0 | 0 | 1 |" in text.splitlines()
+    assert "| qwen | level1 | 0 | 0 | - | - | - | - |" in text.splitlines()  # outcomes
     assert "| qwen | - | 100% [21–100%] n=1 |" in text
 
     out = tmp_path / "summary.csv"
@@ -258,42 +258,48 @@ def test_check_pass_rates() -> None:
 # --- level differences ------------------------------------------------------------------
 
 
-def test_level_differences_are_paired_by_scenario_and_marked() -> None:
+def _metric(comparisons: Sequence[Any], metric: str, model: str = "qwen") -> Any:
+    [found] = [c for c in comparisons if c.metric == metric and c.model == model]
+    return found
+
+
+def test_level_differences_are_paired_by_scenario() -> None:
     records = []
     for i in range(10):
         for repeat in (1, 2):
             records.append(_record_for("level1", f"s{i}", repeat, passed=False, tokens=100))
-            records.append(_record_for("level2", f"s{i}", repeat, tokens=100 + 10 * i))
+            records.append(_record_for("level2", f"s{i}", repeat, tokens=200))
     # Only at level 1, so left out of the comparison.
     records.append(_record_for("level1", "level1-only", tokens=10**6))
 
-    [difference] = compare_levels(records)
-    assert (difference.level_a, difference.level_b, difference.scenarios) == (
-        "level1",
-        "level2",
-        10,
-    )
-    assert difference.success_rate_diff == 1.0
-    assert difference.success_rate_ci == (1.0, 1.0)
-    assert difference.mean_tokens_diff == pytest.approx(45)
-    low, high = difference.mean_tokens_ci
-    assert 0 < low < 45 < high
+    comparisons = compare_levels(records, {})
+    success = _metric(comparisons, "format_success")
+    assert (success.level_a, success.level_b, success.scenarios) == ("level1", "level2", 10)
+    assert success.estimate == 1.0
+    assert success.p_value == pytest.approx(2 / 1024)
+    tokens = _metric(comparisons, "tokens")
+    assert tokens.estimate == pytest.approx(2.0)
+    assert tokens.ci == pytest.approx((2.0, 2.0))
+    assert _metric(comparisons, "reliable").note == "both at ceiling"
     text = render_markdown(records)
-    assert "| qwen | level2 − level1 | 10 | +100 pp | +100 to +100 pp * | +45 |" in text
-    assert render_markdown(records) == text  # the bootstrap is seeded
+    assert "| qwen | level2 − level1 | format success | 10 | +100 pp |" in text
+    assert "| qwen | level2 / level1 | tokens | 10 | 2.00 | 2.00 to 2.00 |" in text
+    assert render_markdown(records) == text
 
 
-def test_identical_levels_differ_by_zero_without_a_mark() -> None:
+def test_identical_levels_are_labelled_at_the_ceiling() -> None:
     records = [
         _record_for(level, f"s{i}", tokens=500) for level in ("level1", "level3") for i in range(5)
     ]
-    [difference] = compare_levels(records)
-    assert difference.success_rate_diff == 0.0
-    assert difference.success_rate_ci == (0.0, 0.0)
-    assert difference.mean_tokens_ci == (0.0, 0.0)
-    [row] = [line for line in render_markdown(records).splitlines() if "level3 − level1" in line]
-    assert "+0 to +0 pp" in row
-    assert "*" not in row
+    success = _metric(compare_levels(records, {}), "format_success")
+    assert success.note == "both at ceiling"
+    assert success.ci is None
+    [row] = [
+        line
+        for line in render_markdown(records).splitlines()
+        if "level3 − level1 | format success" in line
+    ]
+    assert "both at ceiling" in row
 
 
 def test_level_differences_weigh_every_scenario_the_same() -> None:
@@ -305,11 +311,10 @@ def test_level_differences_weigh_every_scenario_the_same() -> None:
         *(_record_for("level2", "easy", r) for r in range(1, 3)),
         *(_record_for("level2", "easy", r, status="error") for r in range(3, 11)),
     ]
-    [difference] = compare_levels(records)
-    assert difference.scenarios == 2
-    assert difference.success_rate_diff == 0.0
-    assert difference.success_rate_ci == (0.0, 0.0)
-    assert difference.mean_tokens_diff == 0.0
+    success = _metric(compare_levels(records, {}), "format_success")
+    assert success.scenarios == 2
+    assert success.estimate == 0.0
+    assert success.ci == (0.0, 0.0)
 
 
 def test_differences_stay_within_each_model() -> None:
@@ -318,10 +323,58 @@ def test_differences_stay_within_each_model() -> None:
         for model in ("qwen", "llama")
         for level in ("level1", "level2")
     ]
-    assert [(d.model, d.level_a, d.level_b) for d in compare_levels(records)] == [
-        ("qwen", "level1", "level2"),
-        ("llama", "level1", "level2"),
+    pairs = {(c.model, c.level_a, c.level_b) for c in compare_levels(records, {})}
+    assert pairs == {("qwen", "level1", "level2"), ("llama", "level1", "level2")}
+
+
+def test_tokens_per_success_is_not_evaluable_without_successes() -> None:
+    records = [
+        *(_record_for("level1", f"s{i}", passed=False) for i in range(4)),
+        *(_record_for("level2", f"s{i}") for i in range(4)),
     ]
+    tps = _metric(compare_levels(records, {}), "tokens_per_success")
+    assert tps.note == "not evaluable"
+    assert tps.estimate is None
+
+
+def test_h1a_is_non_inferiority_with_lower_cost() -> None:
+    from tool_eval.evaluation.analysis import h1a
+
+    records = [
+        *(_record_for("level1", f"s{i}", r, tokens=1000) for i in range(10) for r in (1, 2)),
+        *(_record_for("level2", f"s{i}", r, tokens=400 + i) for i in range(10) for r in (1, 2)),
+    ]
+    # Without judgments "success" is undecided, so use records the judge saw: build an index
+    # that marks every run as passing.
+    index = {
+        (r.config_sha256, r.run_id): _passing_judgment(r) for r in (_with_facts(r) for r in records)
+    }
+    with_facts = [_with_facts(r) for r in records]
+    [result] = h1a(compare_levels(with_facts, index))
+    assert result.success.note == "both at ceiling"
+    assert result.cost.estimate == pytest.approx(0.4045, abs=1e-3)
+    assert result.supported is True
+
+
+def _with_facts(record: RunRecord) -> RunRecord:
+    assert record.outcome is not None
+    outcome = record.outcome.model_copy(
+        update={"facts": [CriterionResult(name="papers_cited", passed=True)]}
+    )
+    return record.model_copy(update={"outcome": outcome})
+
+
+def _passing_judgment(record: RunRecord) -> Any:
+    from tool_eval.evaluation.models import Judgment
+
+    return Judgment(
+        run_id=record.run_id,
+        config_sha256=record.config_sha256,
+        judge_sha256="j",
+        valid_review=5,
+        relevance=5,
+        faithfulness=[5, 5],
+    )
 
 
 # --- inputs and warnings ------------------------------------------------------------------
@@ -390,12 +443,15 @@ def test_cli_reports_several_files_and_writes_a_csv(
     text = capsys.readouterr().out
     headings = [line for line in text.splitlines() if line.startswith("## ")]
     assert headings == [
-        "## Overview: success rate [95% Wilson interval]",
-        "## Quality",
+        "## Outcomes [95% Wilson interval]",
+        "## Judge ratings and fact checks",
+        "## Overview: format success [95% Wilson interval]",
+        "## Quality (format checks)",
         "## Stability: pass^k",
         "## Tool calls",
         "## Cost and time",
         "## Level differences",
+        "## H1a: level 2 against level 1 on base tasks",
         "## Checks (pass rate)",
         "## Repeatability and consistency",
         "## Per scenario (success rate / mean tokens)",
@@ -454,7 +510,7 @@ def _variant(level: str, scenario: str, repeat: int, *, score: float, tokens: in
 
 
 def test_base_and_variant_runs_are_reported_separately(tmp_path: Path) -> None:
-    from tool_eval.evaluation.report import compare_levels, render_markdown, summarize, write_csv
+    from tool_eval.evaluation.report import render_markdown, summarize, write_csv
 
     records = [
         *(
@@ -472,17 +528,22 @@ def test_base_and_variant_runs_are_reported_separately(tmp_path: Path) -> None:
         ("variant", "level2"),
         ("variant", "level3"),
     ]
-    variant_diff = next(d for d in compare_levels(records) if d.task_type == "variant")
+    comparisons = compare_levels(records, {})
+    variant_diff = next(
+        d for d in comparisons if d.task_type == "variant" and d.metric == "format_success"
+    )
     assert variant_diff.scenarios == 2
-    assert variant_diff.success_rate_diff == -1.0  # level3 - level2 on variants only
-    base_diff = next(d for d in compare_levels(records) if d.task_type == "base")
-    assert base_diff.success_rate_diff == 0.0
+    assert variant_diff.estimate == -1.0  # level3 - level2 on variants only
+    base_diff = next(
+        d for d in comparisons if d.task_type == "base" and d.metric == "format_success"
+    )
+    assert base_diff.note == "both at ceiling"
 
     text = render_markdown(records)
     assert "# Evaluation report: base tasks" in text
     assert "# Evaluation report: variants with an added requirement" in text
     assert "## Success by requirement" in text
-    assert "| m | level3 | table | 2 | 0% |" in text
+    assert "| m | level3 | table | 2 | - | 0% |" in text
 
     path = tmp_path / "s.csv"
     write_csv(summaries, path)
@@ -495,4 +556,47 @@ def test_base_only_results_have_no_variant_section() -> None:
 
     text = render_markdown([_record("level1", "a", 1, score=1.0, tokens=10)])
     assert text.startswith("# Evaluation report\n")
-    assert "variant" not in text
+    assert "variants with an added requirement" not in text
+    assert "Success by requirement" not in text
+
+
+def test_paired_t_interval_matches_a_hand_computation() -> None:
+    from tool_eval.evaluation.stats import paired_t_interval
+
+    result = paired_t_interval([1.0, 2.0, 3.0, 4.0])
+    assert result is not None
+    mean, low, high = result
+    # sd = 1.2910, se = 0.6455, t(3) = 3.182
+    assert mean == 2.5
+    assert low == pytest.approx(2.5 - 3.182 * 0.645497, abs=1e-4)
+    assert high == pytest.approx(2.5 + 3.182 * 0.645497, abs=1e-4)
+    assert paired_t_interval([1.0]) is None
+
+
+def test_sign_flip_p_values() -> None:
+    from tool_eval.evaluation.stats import sign_flip_p
+
+    # All 10 differences positive: only the observed and the all-negative assignment are as
+    # extreme, so the two-sided p is 2 / 1024.
+    assert sign_flip_p([1.0] * 10) == pytest.approx(2 / 1024)
+    assert sign_flip_p([1.0] * 10, alternative="greater") == pytest.approx(1 / 1024)
+    assert sign_flip_p([1.0, -1.0]) == 1.0
+    assert sign_flip_p([]) is None
+
+
+def test_holm_adjustment() -> None:
+    from tool_eval.evaluation.stats import holm
+
+    assert holm([0.01, 0.04, None, 0.03]) == pytest.approx([0.03, 0.06, None, 0.06])
+
+
+def test_bca_interval_covers_the_mean_and_is_reproducible() -> None:
+    from tool_eval.evaluation.stats import bca_interval
+
+    values = [float(v) for v in (3, 5, 4, 6, 5, 7, 4, 5, 6, 5)]
+    interval = bca_interval(values, lambda s: sum(s) / len(s), resamples=4000)
+    assert interval is not None
+    low, high = interval
+    assert low < 5.0 < high
+    assert bca_interval(values, lambda s: sum(s) / len(s), resamples=4000) == interval
+    assert bca_interval([1.0], lambda s: s[0]) is None

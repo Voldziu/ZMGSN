@@ -123,3 +123,148 @@ def cluster_bootstrap[T](
         values.sort()
         intervals.append((quantile(values, _TAIL), quantile(values, 1 - _TAIL)))
     return intervals
+
+
+# Two-sided 95% quantiles of Student's t for 1..30 degrees of freedom; above 30 the normal
+# quantile is within 2% and is used instead.
+_T_975 = (
+    12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+    2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+    2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+)  # fmt: skip
+EXACT_SIGN_FLIP_MAX = 20
+SIGN_FLIP_DRAWS = 100_000
+
+
+def t_quantile_975(df: int) -> float:
+    """Return the 0.975 quantile of Student's t with `df` degrees of freedom."""
+    if df < 1:
+        msg = "degrees of freedom must be positive"
+        raise ValueError(msg)
+    return _T_975[df - 1] if df <= len(_T_975) else Z_95
+
+
+def paired_t_interval(diffs: Sequence[float]) -> tuple[float, float, float] | None:
+    """Mean of paired differences with its 95% t-interval (df = n - 1).
+
+    Args:
+        diffs: One difference per pair, for example per scenario.
+
+    Returns:
+        `(mean, low, high)`, or `None` with fewer than two differences.
+    """
+    n = len(diffs)
+    if n < 2:
+        return None
+    mean = sum(diffs) / n
+    variance = sum((d - mean) ** 2 for d in diffs) / (n - 1)
+    half = t_quantile_975(n - 1) * math.sqrt(variance / n)
+    return mean, mean - half, mean + half
+
+
+def sign_flip_p(
+    diffs: Sequence[float], *, alternative: str = "two-sided", seed: int = 0
+) -> float | None:
+    """P-value of the sign-flip permutation test that the paired differences are centred on 0.
+
+    Under the null every difference is equally likely to have either sign, so the test compares
+    the observed mean with the means of all 2^n sign assignments (exact up to
+    `EXACT_SIGN_FLIP_MAX` pairs, else `SIGN_FLIP_DRAWS` seeded random assignments).
+
+    Args:
+        diffs: Paired differences.
+        alternative: `two-sided`, `greater` (mean > 0) or `less` (mean < 0).
+        seed: Seed of the random assignments for large n.
+
+    Returns:
+        The p-value, or `None` without differences.
+    """
+    n = len(diffs)
+    if n == 0:
+        return None
+    observed = sum(diffs)
+    eps = 1e-12 * (1 + sum(abs(d) for d in diffs))
+
+    def extreme(total: float) -> bool:
+        if alternative == "greater":
+            return total >= observed - eps
+        if alternative == "less":
+            return total <= observed + eps
+        return abs(total) >= abs(observed) - eps
+
+    if n <= EXACT_SIGN_FLIP_MAX:
+        hits = 0
+        for mask in range(1 << n):
+            total = sum(-d if mask >> i & 1 else d for i, d in enumerate(diffs))
+            hits += extreme(total)
+        return hits / (1 << n)
+    rng = random.Random(seed)
+    hits = sum(
+        extreme(sum(d if rng.random() < 0.5 else -d for d in diffs))  # noqa: S311
+        for _ in range(SIGN_FLIP_DRAWS)
+    )
+    return (hits + 1) / (SIGN_FLIP_DRAWS + 1)
+
+
+def bca_interval[T](
+    clusters: Sequence[T],
+    statistic: Callable[[Sequence[T]], float | None],
+    *,
+    resamples: int = BOOTSTRAP_RESAMPLES,
+    seed: int = 0,
+) -> tuple[float, float] | None:
+    """95% bias-corrected and accelerated bootstrap interval over resampled clusters.
+
+    Resamples where the statistic is undefined (`None`) are dropped.
+
+    Args:
+        clusters: Independent units, for example scenarios.
+        statistic: Function of a resampled multiset of clusters.
+        resamples: Number of resamples.
+        seed: Seed of the resampling.
+
+    Returns:
+        `(low, high)`, or `None` when the statistic is undefined on the data, there are fewer
+        than two clusters, or too few resamples are defined.
+    """
+    estimate = statistic(clusters)
+    if estimate is None or len(clusters) < 2:
+        return None
+    rng = random.Random(seed)
+    draws = []
+    for _ in range(resamples):
+        value = statistic(rng.choices(clusters, k=len(clusters)))
+        if value is not None:
+            draws.append(value)
+    if len(draws) < resamples // 2:
+        return None
+    draws.sort()
+    below = sum(v < estimate for v in draws) + 0.5 * sum(v == estimate for v in draws)
+    proportion = min(max(below / len(draws), 1 / len(draws)), 1 - 1 / len(draws))
+    z0 = NormalDist().inv_cdf(proportion)
+    jack = [statistic([c for j, c in enumerate(clusters) if j != i]) for i in range(len(clusters))]
+    defined = [v for v in jack if v is not None]
+    acceleration = 0.0
+    if len(defined) == len(clusters):
+        centre = sum(defined) / len(defined)
+        num = sum((centre - v) ** 3 for v in defined)
+        den = 6 * sum((centre - v) ** 2 for v in defined) ** 1.5
+        acceleration = num / den if den else 0.0
+    bounds = []
+    for tail in (_TAIL, 1 - _TAIL):
+        z = NormalDist().inv_cdf(tail)
+        adjusted = NormalDist().cdf(z0 + (z0 + z) / (1 - acceleration * (z0 + z)))
+        bounds.append(quantile(draws, adjusted))
+    return bounds[0], bounds[1]
+
+
+def holm(p_values: Sequence[float | None]) -> list[float | None]:
+    """Holm-adjusted p-values (family-wise error), in the input order; `None` stays `None`."""
+    indexed = sorted((p, i) for i, p in enumerate(p_values) if p is not None)
+    adjusted: list[float | None] = [None] * len(p_values)
+    running = 0.0
+    m = len(indexed)
+    for rank, (p, i) in enumerate(indexed):
+        running = max(running, min(1.0, (m - rank) * p))
+        adjusted[i] = running
+    return adjusted

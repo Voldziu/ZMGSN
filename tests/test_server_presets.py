@@ -83,7 +83,8 @@ def test_eval_presets_prints_the_quality_table() -> None:
     printed = subprocess.run(
         ["awk", program], input=report, capture_output=True, text=True, check=True
     ).stdout.splitlines()
-    assert printed[0] == "## Quality"
-    assert printed[2].startswith("| model | level | runs | successes | success | 95% CI |")
-    assert "| m | level1 | 1 | 1 | 100% | 21–100% |" in printed[4]
-    assert not [line for line in printed[1:] if line.startswith("#")]
+    headings = [line for line in printed if line.startswith("#")]
+    assert headings == ["## Outcomes [95% Wilson interval]", "## Quality (format checks)"]
+    quality = printed[printed.index("## Quality (format checks)") :]
+    assert quality[2].startswith("| model | level | runs | successes | success | 95% CI |")
+    assert "| m | level1 | 1 | 1 | 100% | 21–100% |" in quality[4]

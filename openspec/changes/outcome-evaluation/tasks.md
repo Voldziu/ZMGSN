@@ -30,8 +30,8 @@
 
 ## 5. Statistics and report
 
-- [ ] 5.1 Add `paired_t_interval`, `sign_flip_p` (exact and Monte Carlo), `bca_interval` and `holm` to `stats.py`, with tests against known values.
-- [ ] 5.2 Rework `compare_levels`:
+- [x] 5.1 Add `paired_t_interval`, `sign_flip_p` (exact and Monte Carlo), `bca_interval` and `holm` to `stats.py`, with tests against known values.
+- [x] 5.2 Rework `compare_levels`:
   - per task type;
   - all four outcomes;
   - t-interval and p-value;
@@ -40,10 +40,10 @@
   - tokens-per-success ratio with BCa.
 
   Remove the percentile-bootstrap difference and update `tests/test_report.py`.
-- [ ] 5.3 Add the H1a box (non-inferiority with δ = 15 pp, the cost criterion, Holm across models) and the H1b comparison (variants, `level2 − level3`).
-- [ ] 5.4 Add the interaction contrasts for model pairs and level pairs, resampling scenarios jointly.
-- [ ] 5.5 Add excluded-run counts and the sensitivity line. Show judge ratings and fact pass rates. Have the report find `<results>.judge.jsonl` automatically.
-- [ ] 5.6 CSV: add the new columns and one row per model, level and task type.
+- [x] 5.3 Add the H1a box (non-inferiority with δ = 15 pp, the cost criterion, Holm across models) and the H1b comparison (variants, `level2 − level3`).
+- [x] 5.4 Add the interaction contrasts for model pairs and level pairs, resampling scenarios jointly.
+- [x] 5.5 Add excluded-run counts and the sensitivity line. Show judge ratings and fact pass rates. Have the report find `<results>.judge.jsonl` automatically.
+- [x] 5.6 CSV: add the new columns and one row per model, level and task type.
 
 ## 6. Docs, paper and presentation
 

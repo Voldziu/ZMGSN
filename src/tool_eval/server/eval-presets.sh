@@ -134,7 +134,7 @@ for p in $PRESETS; do
   stop_server
 
   # The quality table of the report: runs, successes with their interval, score, step limit.
-  uv run python -m tool_eval.main report "$out" | awk '/^## /{show = ($0 == "## Quality")} show'
+  uv run python -m tool_eval.main report "$out" | awk '/^## /{show = ($0 ~ /^## (Outcomes|Quality)/)} show'
 done
 
 echo "===== done ($(date +%T)); results: results/presets-<preset>.jsonl"

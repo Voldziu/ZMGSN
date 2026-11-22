@@ -3,26 +3,36 @@
 import csv
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from itertools import combinations
 from pathlib import Path
 from statistics import mean, stdev
-from typing import NamedTuple
 
 from pydantic import BaseModel, ConfigDict
 
-from tool_eval.evaluation.models import RunRecord
-from tool_eval.evaluation.stats import (
-    BOOTSTRAP_RESAMPLES,
-    cluster_bootstrap,
-    pass_hat_k,
-    wilson_interval,
+from tool_eval.evaluation.analysis import (
+    NON_INFERIORITY_MARGIN,
+    OUTCOMES,
+    Comparison,
+    JudgmentIndex,
+    compare_levels,
+    exclusions,
+    h1a,
+    interactions,
+    judgment_index,
+    outcome,
 )
+from tool_eval.evaluation.checks import FACTS
+from tool_eval.evaluation.models import Judgment, RunRecord
+from tool_eval.evaluation.stats import pass_hat_k, wilson_interval
 from tool_eval.exceptions import InvalidInputError
 from tool_eval.services.formatting import format_markdown_table
 
 PASS_K_MAX = 10
 _MISSING = "-"  # undefined, or not measured by any run
-_CSV_EXPANDED = {"pass_hat_k", "check_pass_rates"}  # written as one column per k or check
+_CSV_EXPANDED = {
+    "pass_hat_k",
+    "check_pass_rates",
+    "fact_pass_rates",
+}  # written as one column per k or check
 
 
 class LevelSummary(BaseModel):
@@ -51,6 +61,22 @@ class LevelSummary(BaseModel):
     success_ci_high: float | None
     mean_score: float | None
     check_pass_rates: dict[str, float]
+    # Outcomes with the judge (see `analysis.outcome`): rate and 95% Wilson interval over the
+    # runs where the outcome is decided; `judged_runs` counts runs with a judgment.
+    judged_runs: int = 0
+    artifact_valid_rate: float | None = None
+    artifact_valid_ci_low: float | None = None
+    artifact_valid_ci_high: float | None = None
+    reliable_rate: float | None = None
+    reliable_ci_low: float | None = None
+    reliable_ci_high: float | None = None
+    judged_success_rate: float | None = None
+    judged_success_ci_low: float | None = None
+    judged_success_ci_high: float | None = None
+    mean_valid_review: float | None = None
+    mean_relevance: float | None = None
+    mean_faithfulness: float | None = None
+    fact_pass_rates: dict[str, float] = {}
     # Stability. pass^k for k = 1..10 (index k - 1); None above the fewest runs of a scenario.
     pass_hat_k: tuple[float | None, ...]
     tool_error_rate: float | None  # tool errors per tool call
@@ -81,27 +107,6 @@ class LevelSummary(BaseModel):
     mean_tool_llm_seconds: float | None
     mean_tool_other_seconds: float | None
     mean_wall_seconds: float | None
-
-
-class LevelDifference(BaseModel):
-    """Difference between two levels of one model, `level_b` minus `level_a`.
-
-    Each difference is the mean, over the scenarios the two levels share, of the per-scenario
-    differences, so every scenario weighs the same. The 95% percentile intervals come from a
-    bootstrap that resamples those scenarios.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    model: str
-    level_a: str
-    level_b: str
-    task_type: str = "base"
-    scenarios: int
-    success_rate_diff: float
-    success_rate_ci: tuple[float, float]
-    mean_tokens_diff: float
-    mean_tokens_ci: tuple[float, float]
 
 
 def load_records(path: Path) -> list[RunRecord]:
@@ -154,81 +159,26 @@ def load_results(paths: Sequence[Path]) -> list[RunRecord]:
     return records
 
 
-def summarize(records: Sequence[RunRecord]) -> list[LevelSummary]:
+def summarize(
+    records: Sequence[RunRecord], judgments: Iterable[Judgment] = ()
+) -> list[LevelSummary]:
     """Compute one summary per model and level.
 
     Args:
         records: Run records, possibly from several models and levels.
+        judgments: The judge's ratings of these runs, if any.
 
     Returns:
         Summaries, base tasks before variants, then models in order of first appearance and
         levels by name (runs are stored in a random level order). Base tasks and variants are
         never pooled.
     """
+    index = judgment_index(judgments)
     return [
-        _summarize_group(model, level, items, task_type)
+        _summarize_group(model, level, items, task_type, index)
         for task_type, subset in _by_task_type(records).items()
         for (model, level), items in _by_model_and_level(subset).items()
     ]
-
-
-def compare_levels(records: Sequence[RunRecord]) -> list[LevelDifference]:
-    """Estimate the differences between every pair of levels of each model.
-
-    Each difference (later level minus earlier level, by name) is the mean of the per-scenario
-    differences over the scenarios both levels share, so a scenario with more scored runs at one
-    level does not weigh more. Its 95% interval comes from a cluster bootstrap over those
-    scenarios, because runs of one scenario are correlated; the fixed seed makes the intervals
-    reproducible.
-
-    Args:
-        records: Run records, possibly from several models.
-
-    Returns:
-        One difference per task type, model and pair of levels that share a scenario; base
-        tasks and variants are compared separately.
-    """
-    return [
-        difference.model_copy(update={"task_type": task_type})
-        for task_type, subset in _by_task_type(records).items()
-        for difference in _compare_within(subset)
-    ]
-
-
-def _compare_within(records: Sequence[RunRecord]) -> list[LevelDifference]:
-    """Level differences of records of one task type."""
-    groups = _by_model_and_level(_scored(records))
-    levels_of: dict[str, list[str]] = defaultdict(list)
-    for model, level in groups:
-        levels_of[model].append(level)
-    differences = []
-    for model, levels in levels_of.items():
-        for level_a, level_b in combinations(levels, 2):
-            runs_a = _by_scenario(groups[model, level_a])
-            runs_b = _by_scenario(groups[model, level_b])
-            per_scenario = [
-                _ScenarioDifference.between(runs_a[scenario], runs_b[scenario])
-                for scenario in runs_a
-                if scenario in runs_b
-            ]
-            if not per_scenario:
-                continue
-            success_ci, tokens_ci = cluster_bootstrap(
-                per_scenario, [_mean_success_difference, _mean_tokens_difference]
-            )
-            differences.append(
-                LevelDifference(
-                    model=model,
-                    level_a=level_a,
-                    level_b=level_b,
-                    scenarios=len(per_scenario),
-                    success_rate_diff=_mean_success_difference(per_scenario),
-                    success_rate_ci=success_ci,
-                    mean_tokens_diff=_mean_tokens_difference(per_scenario),
-                    mean_tokens_ci=tokens_ci,
-                )
-            )
-    return differences
 
 
 def write_csv(summaries: Sequence[LevelSummary], path: Path) -> None:
@@ -244,6 +194,7 @@ def write_csv(summaries: Sequence[LevelSummary], path: Path) -> None:
     base = [name for name in LevelSummary.model_fields if name not in _CSV_EXPANDED]
     passes = [f"pass_{k}" for k in range(1, PASS_K_MAX + 1)]
     checks = list(dict.fromkeys(f"check_{n}" for s in summaries for n in s.check_pass_rates))
+    checks += list(dict.fromkeys(f"fact_{n}" for s in summaries for n in s.fact_pass_rates))
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=[*base, *passes, *checks], restval="")
@@ -252,10 +203,11 @@ def write_csv(summaries: Sequence[LevelSummary], path: Path) -> None:
             row = summary.model_dump(exclude=_CSV_EXPANDED)
             row |= {f"pass_{k}": value for k, value in enumerate(summary.pass_hat_k, start=1)}
             row |= {f"check_{name}": rate for name, rate in summary.check_pass_rates.items()}
+            row |= {f"fact_{name}": rate for name, rate in summary.fact_pass_rates.items()}
             writer.writerow({key: "" if value is None else value for key, value in row.items()})
 
 
-def render_markdown(records: Sequence[RunRecord]) -> str:
+def render_markdown(records: Sequence[RunRecord], judgments: Iterable[Judgment] = ()) -> str:
     """Render the full report: overview, quality, stability, cost, comparisons and run lists.
 
     Base tasks and variants with an added requirement get separate reports in one document;
@@ -263,53 +215,115 @@ def render_markdown(records: Sequence[RunRecord]) -> str:
 
     Args:
         records: Run records to report on, possibly from several models.
+        judgments: The judge's ratings of these runs, if any.
 
     Returns:
         Markdown text.
     """
+    index = judgment_index(judgments)
     by_type = _by_task_type(records)
     if set(by_type) <= {"base"}:
-        return _render(records, "# Evaluation report")
+        return _render(records, "# Evaluation report", index)
     parts = []
     if "base" in by_type:
-        parts.append(_render(by_type["base"], "# Evaluation report: base tasks"))
+        parts.append(_render(by_type["base"], "# Evaluation report: base tasks", index))
     variants = by_type["variant"]
     parts.append(
-        _render(variants, "# Evaluation report: variants with an added requirement")
+        _render(variants, "# Evaluation report: variants with an added requirement", index)
         + "\n## Success by requirement\n\n"
         + format_markdown_table(
-            ["model", "level", "requirement", "runs", "success"],
-            _requirement_rows(variants),
+            ["model", "level", "requirement", "runs", "success", "format success"],
+            _requirement_rows(variants, index),
         )
         + "\n"
     )
     return "\n".join(parts)
 
 
-def _requirement_rows(records: Sequence[RunRecord]) -> list[list[str]]:
+def _requirement_rows(records: Sequence[RunRecord], index: JudgmentIndex) -> list[list[str]]:
     groups: dict[tuple[str, str, str], list[RunRecord]] = defaultdict(list)
     for record in _scored(records):
         groups[record.model, record.level, record.requirement or _MISSING].append(record)
     rows = []
     for (model, level, requirement), items in groups.items():
         rate = sum(r.success for r in items) / len(items)
-        rows.append([model, level, requirement, str(len(items)), _pct(rate)])
+        decided = [v for r in items if (v := outcome(r, "success", index)) is not None]
+        rows.append(
+            [
+                model,
+                level,
+                requirement,
+                str(len(items)),
+                _pct(sum(decided) / len(decided) if decided else None),
+                _pct(rate),
+            ]
+        )
     return sorted(rows, key=lambda row: (row[0], row[1], row[2]))
 
 
-def _render(records: Sequence[RunRecord], title: str) -> str:
-    summaries = summarize(records)
+def _render(records: Sequence[RunRecord], title: str, index: JudgmentIndex) -> str:
+    summaries = summarize(records, index.values())
+    comparisons = compare_levels(records, index)
     levels = sorted({s.level for s in summaries})
     sections = [
         title,
         *_configuration_warnings(records),
         "Metrics use the scored runs: every run except those with an infrastructure error. "
-        "A run succeeds only if it completed (no step limit, no loop, not failed) and passed every "
-        "check. "
+        "Two outcome axes: a run's review is *artifact valid* when every fact check passes, the "
+        "judge rates it at least 4 on every scale and a variant meets its requirement; a run is "
+        "*reliable* when the agent ended it itself (completed); a *success* is both. *Format "
+        "success* is the original rule: completed and every format check passed. "
         f"`{_MISSING}` marks a value that is undefined or that no run measured.",
-        "## Overview: success rate [95% Wilson interval]",
+        "## Outcomes [95% Wilson interval]",
+        "Rates over the runs where the outcome is decided; judged = runs with a judgment.",
+        format_markdown_table(
+            [
+                "model",
+                "level",
+                "runs",
+                "judged",
+                "success",
+                "artifact valid",
+                "reliable",
+                "format success",
+            ],
+            [
+                [
+                    s.model,
+                    s.level,
+                    str(s.runs),
+                    str(s.judged_runs),
+                    _rate_with_interval(
+                        s.judged_success_rate, s.judged_success_ci_low, s.judged_success_ci_high
+                    ),
+                    _rate_with_interval(
+                        s.artifact_valid_rate, s.artifact_valid_ci_low, s.artifact_valid_ci_high
+                    ),
+                    _rate_with_interval(s.reliable_rate, s.reliable_ci_low, s.reliable_ci_high),
+                    _rate_with_interval(s.success_rate, s.success_ci_low, s.success_ci_high),
+                ]
+                for s in summaries
+            ],
+        ),
+        "## Judge ratings and fact checks",
+        "Mean judge ratings (1-5) and the pass rate of each fact check (ids anywhere in the file).",
+        format_markdown_table(
+            ["model", "level", "valid review", "relevance", "faithfulness", *FACTS],
+            [
+                [
+                    s.model,
+                    s.level,
+                    _num(s.mean_valid_review, 2),
+                    _num(s.mean_relevance, 2),
+                    _num(s.mean_faithfulness, 2),
+                    *(_pct(s.fact_pass_rates.get(name)) for name in FACTS),
+                ]
+                for s in summaries
+            ],
+        ),
+        "## Overview: format success [95% Wilson interval]",
         format_markdown_table(["model", *levels], _overview_rows(summaries, levels)),
-        "## Quality",
+        "## Quality (format checks)",
         format_markdown_table(
             [
                 "model",
@@ -430,14 +444,15 @@ def _render(records: Sequence[RunRecord], title: str) -> str:
         ),
         "*Wall time depends on network and arXiv throttling; treat it as indicative only.",
         "## Level differences",
-        "Later level minus earlier level within each model: the mean of the per-scenario "
-        "differences over the scenarios both levels share, with 95% intervals from a cluster "
-        f"bootstrap over scenarios ({BOOTSTRAP_RESAMPLES:,} resamples). `*` marks an interval "
-        "that excludes zero.",
+        "Later level minus earlier level within each model: outcomes as the mean of per-scenario "
+        "differences in percentage points, tokens as the geometric-mean ratio, with 95% "
+        "t-intervals over scenarios and exact sign-flip p-values; tokens per success as a ratio "
+        "with a scenario-bootstrap BCa interval and a one-sided p-value (lower cost).",
         format_markdown_table(
-            ["model", "comparison", "scenarios", "Δ success", "95% CI", "Δ tokens", "95% CI"],
-            _difference_rows(compare_levels(records)),
+            ["model", "comparison", "metric", "scenarios", "estimate", "95% CI", "p"],
+            _comparison_rows(comparisons),
         ),
+        *_hypothesis_sections(records, comparisons, index),
         "## Checks (pass rate)",
         _checks_table(summaries),
         "## Repeatability and consistency",
@@ -522,7 +537,11 @@ def _by_scenario(records: Iterable[RunRecord]) -> dict[str, list[RunRecord]]:
 
 
 def _summarize_group(
-    model: str, level: str, items: Sequence[RunRecord], task_type: str = "base"
+    model: str,
+    level: str,
+    items: Sequence[RunRecord],
+    task_type: str = "base",
+    index: JudgmentIndex | None = None,
 ) -> LevelSummary:
     valid = _scored(items)
     by_scenario = _by_scenario(valid)
@@ -545,7 +564,36 @@ def _summarize_group(
     split = [r.cost for r in valid if r.cost.tool_errors_environment is not None]
     split_calls = sum(c.tool_calls for c in split)
     paper_reads = [n for r in valid if r.cost.chars_read for n in r.cost.chars_read.values()]
+    index = index or {}
+    rates = {
+        name: _decided_rate([outcome(r, name, index) for r in valid])
+        for name in ("success", "artifact_valid", "reliable")
+    }
+    judged = [j for r in valid if (j := index.get((r.config_sha256, r.run_id))) is not None]
+    with_facts = [r for r in valid if r.outcome is not None and r.outcome.facts]
     return LevelSummary(
+        judged_runs=len(judged),
+        judged_success_rate=rates["success"][0],
+        judged_success_ci_low=rates["success"][1],
+        judged_success_ci_high=rates["success"][2],
+        artifact_valid_rate=rates["artifact_valid"][0],
+        artifact_valid_ci_low=rates["artifact_valid"][1],
+        artifact_valid_ci_high=rates["artifact_valid"][2],
+        reliable_rate=rates["reliable"][0],
+        reliable_ci_low=rates["reliable"][1],
+        reliable_ci_high=rates["reliable"][2],
+        mean_valid_review=_mean(j.valid_review for j in judged),
+        mean_relevance=_mean(j.relevance for j in judged),
+        mean_faithfulness=_mean(f for j in judged for f in j.faithfulness),
+        fact_pass_rates={
+            name: sum(
+                f.passed for r in with_facts if r.outcome for f in r.outcome.facts if f.name == name
+            )
+            / len(with_facts)
+            for name in FACTS
+        }
+        if with_facts
+        else {},
         model=model,
         level=level,
         task_type=task_type,
@@ -612,6 +660,18 @@ def _summarize_group(
     )
 
 
+def _decided_rate(values: Sequence[bool | None]) -> tuple[float | None, float | None, float | None]:
+    decided = [v for v in values if v is not None]
+    if not decided:
+        return None, None, None
+    interval = wilson_interval(sum(decided), len(decided))
+    return (
+        sum(decided) / len(decided),
+        interval[0] if interval else None,
+        interval[1] if interval else None,
+    )
+
+
 def _check_pass_rates(valid: Sequence[RunRecord]) -> dict[str, float]:
     passed: dict[str, list[bool]] = {}
     for record in valid:
@@ -620,61 +680,168 @@ def _check_pass_rates(valid: Sequence[RunRecord]) -> dict[str, float]:
     return {name: sum(values) / len(values) for name, values in passed.items()}
 
 
-# --- level differences -------------------------------------------------------------------
+# --- planned comparisons ---------------------------------------------------------------
 
 
-class _ScenarioDifference(NamedTuple):
-    """One scenario's difference between two levels (b minus a): success rate, mean tokens."""
+_PERCENT_METRICS = set(OUTCOMES)
 
-    success: float
-    tokens: float
 
-    @classmethod
-    def between(
-        cls, runs_a: Sequence[RunRecord], runs_b: Sequence[RunRecord]
-    ) -> "_ScenarioDifference":
-        return cls(
-            success=_success_rate(runs_b) - _success_rate(runs_a),
-            tokens=_mean_tokens(runs_b) - _mean_tokens(runs_a),
+def _comparison_rows(comparisons: Sequence[Comparison]) -> list[list[str]]:
+    rows = []
+    for c in comparisons:
+        percent = c.metric in _PERCENT_METRICS
+        if c.note and c.estimate is None:
+            estimate, interval = c.note, _MISSING
+        elif c.note:
+            estimate, interval = _format_estimate(c.estimate, percent=percent), c.note
+        else:
+            estimate = _format_estimate(c.estimate, percent=percent)
+            interval = _format_interval(c.ci, percent=percent)
+        rows.append(
+            [
+                c.model,
+                f"{c.level_b} − {c.level_a}" if percent else f"{c.level_b} / {c.level_a}",
+                c.metric.replace("_", " "),
+                str(c.scenarios),
+                estimate,
+                interval,
+                _num(c.p_value, 3),
+            ]
         )
+    return rows
 
 
-def _success_rate(runs: Sequence[RunRecord]) -> float:
-    return sum(r.success for r in runs) / len(runs)
+def _format_estimate(value: float | None, *, percent: bool) -> str:
+    if value is None:
+        return _MISSING
+    return f"{value * 100:+.0f} pp" if percent else f"{value:.2f}"
 
 
-def _mean_tokens(runs: Sequence[RunRecord]) -> float:
-    return sum(r.cost.total_tokens for r in runs) / len(runs)
+def _format_interval(ci: tuple[float, float] | None, *, percent: bool) -> str:
+    if ci is None:
+        return _MISSING
+    if percent:
+        return f"{ci[0] * 100:+.0f} to {ci[1] * 100:+.0f} pp"
+    return f"{ci[0]:.2f} to {ci[1]:.2f}"
 
 
-# Plain sums, not statistics.mean: these run 10,000 times per comparison.
-def _mean_success_difference(sample: Sequence[_ScenarioDifference]) -> float:
-    return sum(d.success for d in sample) / len(sample)
-
-
-def _mean_tokens_difference(sample: Sequence[_ScenarioDifference]) -> float:
-    return sum(d.tokens for d in sample) / len(sample)
-
-
-def _difference_rows(differences: Sequence[LevelDifference]) -> list[list[str]]:
-    return [
-        [
-            d.model,
-            f"{d.level_b} − {d.level_a}",
-            str(d.scenarios),
-            f"{d.success_rate_diff * 100:+.0f} pp",
-            _signed_interval(d.success_rate_ci, scale=100, unit=" pp"),
-            f"{d.mean_tokens_diff:+.0f}",
-            _signed_interval(d.mean_tokens_ci),
+def _hypothesis_sections(
+    records: Sequence[RunRecord], comparisons: Sequence[Comparison], index: JudgmentIndex
+) -> list[str]:
+    sections: list[str] = []
+    tests = h1a(comparisons)
+    if tests:
+        sections += [
+            "## H1a: level 2 against level 1 on base tasks",
+            f"Success non-inferior with a margin of {NON_INFERIORITY_MARGIN * 100:.0f} pp "
+            "(one-sided sign-flip test of the shifted differences) and a lower cost per success "
+            "(one-sided); p = the larger of the two, Holm-corrected across models.",
+            format_markdown_table(
+                [
+                    "model",
+                    "Δ success",
+                    "95% CI",
+                    "tokens/success ratio",
+                    "95% CI",
+                    "p",
+                    "p Holm",
+                    "H1a",
+                ],
+                [
+                    [
+                        t.model,
+                        t.success.note or _format_estimate(t.success.estimate, percent=True),
+                        _format_interval(t.success.ci, percent=True),
+                        t.cost.note or _format_estimate(t.cost.estimate, percent=False),
+                        _format_interval(t.cost.ci, percent=False),
+                        _num(t.p_value, 3),
+                        _num(t.p_holm, 3),
+                        {True: "supported", False: "not supported", None: "not evaluable"}[
+                            t.supported
+                        ],
+                    ]
+                    for t in tests
+                ],
+            ),
         ]
-        for d in differences
+    h1b = [
+        c
+        for c in comparisons
+        if c.task_type == "variant"
+        and c.metric == "success"
+        and (c.level_a, c.level_b) == ("level2", "level3")
     ]
+    if h1b:
+        sections += [
+            "## H1b: level 2 against level 3 on variants",
+            "Success of level 2 minus level 3 over the variants (positive supports H1b).",
+            format_markdown_table(
+                ["model", "variants", "level2 − level3", "95% CI", "p"],
+                [
+                    [
+                        c.model,
+                        str(c.scenarios),
+                        c.note
+                        or _format_estimate(
+                            None if c.estimate is None else -c.estimate, percent=True
+                        ),
+                        _format_interval(
+                            None if c.ci is None else (-c.ci[1], -c.ci[0]), percent=True
+                        ),
+                        _num(c.p_value, 3),
+                    ]
+                    for c in h1b
+                ],
+            ),
+        ]
+    contrasts = interactions(records, index)
+    if contrasts:
+        sections += [
+            "## Level-by-model interactions",
+            "(A: level b − level a) − (B: level b − level a), success in percentage points and "
+            "tokens as a log ratio, with 95% intervals from a bootstrap over shared scenarios.",
+            format_markdown_table(
+                ["models", "levels", "metric", "scenarios", "estimate", "95% CI"],
+                [
+                    [
+                        f"{i.model_a} vs {i.model_b}",
+                        f"{i.level_b} − {i.level_a}",
+                        i.metric.replace("_", " "),
+                        str(i.scenarios),
+                        _format_estimate(i.estimate, percent=i.metric == "success"),
+                        _format_interval(i.ci, percent=i.metric == "success"),
+                    ]
+                    for i in contrasts
+                ],
+            ),
+        ]
+    excluded = [e for e in exclusions(records, index) if e.excluded]
+    if excluded:
+        sections += [
+            "## Excluded runs (sensitivity)",
+            "Runs excluded as infrastructure errors, and the success rate with them counted as "
+            "failures.",
+            format_markdown_table(
+                ["model", "level", "excluded", "success", "errors as failures"],
+                [
+                    [
+                        e.model,
+                        e.level,
+                        str(e.excluded),
+                        _pct(e.success_rate),
+                        _pct(e.success_rate_errors_as_failures),
+                    ]
+                    for e in excluded
+                ],
+            ),
+        ]
+    return sections
 
 
-def _signed_interval(interval: tuple[float, float], *, scale: float = 1, unit: str = "") -> str:
-    low, high = interval
-    mark = " *" if low > 0 or high < 0 else ""
-    return f"{low * scale:+.0f} to {high * scale:+.0f}{unit}{mark}"
+def _rate_with_interval(rate: float | None, low: float | None, high: float | None) -> str:
+    if rate is None:
+        return _MISSING
+    return f"{_pct(rate)} {_interval(low, high)}"
 
 
 # --- tables ---------------------------------------------------------------------------------
@@ -738,6 +905,14 @@ def _scenario_rows(records: Sequence[RunRecord], levels: Sequence[str]) -> list[
                 row.append(_MISSING)
         rows.append(row)
     return rows
+
+
+def _success_rate(runs: Sequence[RunRecord]) -> float:
+    return sum(r.success for r in runs) / len(runs)
+
+
+def _mean_tokens(runs: Sequence[RunRecord]) -> float:
+    return sum(r.cost.total_tokens for r in runs) / len(runs)
 
 
 # --- small helpers -------------------------------------------------------------------------
