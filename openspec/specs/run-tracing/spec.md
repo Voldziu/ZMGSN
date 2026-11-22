@@ -91,3 +91,14 @@ With tracing enabled, the outcome score and the result of every criterion SHALL 
 #### Scenario: Link from results to trace
 - **WHEN** a run record is read from the results file
 - **THEN** its MLflow run ID and trace ID identify the matching run and trace on the server
+
+### Requirement: MLflow parameters describe the sampling and the served model
+When tracing is enabled, each evaluation run's MLflow parameters SHALL include:
+- `top_p`, `top_k` and the completion token limit;
+- the served model's checkpoint, quantisation, tool-call parser, chat-template hash and vLLM version.
+
+These SHALL be the same values that enter the configuration hash.
+
+#### Scenario: Comparing qwen-mid servers
+- **WHEN** runs of `qwen-mid` are traced against a BF16 server
+- **THEN** their MLflow parameters show the checkpoint `Qwen/Qwen3.5-4B` with no quantisation
