@@ -5,9 +5,10 @@
 <title>ZMGSN 2026 – zajęcia 6–7</title>
 <!--
   Slides for classes 6–7, appended to docs/presentations/progress.pdf.
-  Render (each .slide is one 960×540 pt page):
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
-      --no-pdf-header-footer --virtual-time-budget=15000 \
+  Render (each .slide is one 960×540 pt page). Headless Chrome on this Mac aborts with
+  "path_service ... Failed to get the path for 1001"; Edge with its own profile works:
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" --headless=new \
+      --user-data-dir="$(mktemp -d)" --no-pdf-header-footer --virtual-time-budget=15000 \
       --print-to-pdf=docs/presentations/progress-6-7.pdf file://$PWD/docs/presentations/src/progress-6-7.html
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -389,7 +390,8 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
     <div class="mech"><div class="ml">Pamięć</div><div class="mt">historia wiadomości + workspace jako pamięć zewnętrzna</div></div>
     <div class="mech"><div class="ml">Planowanie</div><div class="mt">niejawne w ReAct; na L3 zakodowane w narzędziu</div></div>
     <div class="mech"><div class="ml">Weryfikacja</div><div class="mt">schematy Pydantic i kontrole w narzędziach; agent nie widzi wyniku ewaluatora</div></div>
-    <div class="mech"><div class="ml">Limity</div><div class="mt">100 wywołań modelu · 8192 tokeny odpowiedzi</div></div>
+    <div class="mech"><div class="ml">Komunikacja</div><div class="mt">jeden agent; narzędzia z LLM wołają ten sam model, z tym samym seedem</div></div>
+    <div class="mech"><div class="ml">Limity</div><div class="mt">100 wywołań modelu · 8192 tokeny odpowiedzi · loop guard (8 powtórzeń)</div></div>
   </div>
 </section>
 
@@ -546,6 +548,16 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
         <tr><td>Elastyczność</td><td>success na wariantach z dodatkowym wymaganiem</td><td class="muted">—</td></tr>
       </tbody>
     </table>
+    <div class="card blue" style="margin-top: 18px; padding: 14px 20px;">
+      <div class="caps" style="color: var(--blue);">LLM-as-a-judge: Qwen 9B, po runach, na ślepo (bez modelu i poziomu)</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-top: 8px; font-size: 15px; color: var(--ink); line-height: 1.4;">
+        <div><b>Recenzja (1–5):</b> czy to poprawny przegląd · trafność prac względem tematu</div>
+        <div><b>Wierność (1–5):</b> 2 losowe sekcje vs początek tekstu pracy</div>
+        <div><b>Bez przeglądów:</b> tak/nie z tytułu i abstraktu każdej pracy</div>
+        <div><b>Odpowiedź:</b> same liczby w schemacie Pydantic, temperatura 0</div>
+      </div>
+      <div style="font-size: 14px; color: var(--muted); margin-top: 8px;">Fakty (ID istnieją, daty w oknie, tekst przeczytany), tabelę i język polski sprawdza kod, nie sędzia.</div>
+    </div>
   </div>
   <div class="panel blue-panel" style="width: 440px;">
     <div class="panel-heading">Jakość i koszt razem</div>
@@ -636,7 +648,7 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
           <div style="font-size: 16px; color: var(--ink); margin-top: 6px; line-height: 1.45;">10 wariantów: tabela · po polsku · bez prac przeglądowych (4/3/3)</div>
         </div>
         <div class="card" style="margin-top: 14px;">
-          <div class="caps">Nowa ocena (w trakcie runu)</div>
+          <div class="caps">Nowa ocena</div>
           <div style="font-size: 16px; color: var(--ink); margin-top: 6px; line-height: 1.45;">fakty z całego pliku · sędzia LLM (Qwen 9B, na ślepo, same liczby) · format osobno · dwie osie: jakość artefaktu i niezawodność agenta</div>
         </div>
         <div class="card" style="margin-top: 14px;">
@@ -648,10 +660,38 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
   </div>
 </section>
 
-<!-- 12. 17 / Stan i następne kroki -->
+<!-- 11c. 18 / Pierwsze wyniki: qwen-mid -->
+<section class="slide">
+  <div class="left" style="width: 800px;">
+    <div class="label">18 / Pierwsze wyniki</div>
+    <h2 class="h">Pełny protokół na jednym modelu: Qwen 4B</h2>
+    <div style="font-size: 17px; color: var(--muted); margin-top: 10px;">180 przebiegów · 10 scenariuszy × 2 typy zadań × 3 poziomy × 3 powtórzenia · RTX 5080 · sędzia Qwen 9B</div>
+    <table class="tbl mtbl" style="margin-top: 22px;">
+      <thead><tr><th></th><th>L1</th><th>L2</th><th>L3</th></tr></thead>
+      <tbody>
+        <tr><td>success: zadania bazowe</td><td>100%</td><td>90%</td><td>90%</td></tr>
+        <tr><td>success: z wymaganiem</td><td>93%</td><td>80%</td><td>27%</td></tr>
+        <tr><td class="muted">format success: bazowe / z wymaganiem</td><td class="muted">93% / 77%</td><td class="muted">97% / 97%</td><td class="muted">100% / 100%</td></tr>
+        <tr><td>tokeny na przebieg (bazowe)</td><td>338k</td><td>85k</td><td>35k</td></tr>
+      </tbody>
+    </table>
+    <div style="font-size: 15px; color: var(--muted); margin-top: 16px; line-height: 1.45;">L3 spełnia „tabelę” i „po polsku” w 0% przebiegów; „bez prac przeglądowych” w 89%, bo losowe prace rzadko są przeglądami.</div>
+  </div>
+  <div class="panel blue-panel" style="width: 480px;">
+    <div class="panel-heading">Hipotezy (tylko ten model)</div>
+    <ul class="bullets" style="margin-top: 14px;">
+      <li style="font-size: 17px; margin-top: 14px;"><b>H1a nie potwierdzona:</b> L2 − L1 = −10 pp [−22; +2], margines 15 pp nie wykluczony; tokeny na sukces 0,28× L1</li>
+      <li style="font-size: 17px; margin-top: 14px;"><b>H1b potwierdzona:</b> L2 − L3 = +53 pp [+19; +87], p = 0,016</li>
+      <li style="font-size: 17px; margin-top: 14px;">L3 tani i bezbłędny w formacie, ale nie dostosowuje się do wymagań</li>
+      <li style="font-size: 17px; margin-top: 14px;"><b>Ograniczenia:</b> 1 model, 10 scenariuszy; sędzia łagodny (średnio 4,1–5,0)</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 12. 19 / Stan i następne kroki -->
 <section class="slide">
   <div class="pad">
-    <div class="label">18 / Stan i następne kroki</div>
+    <div class="label">19 / Stan i następne kroki</div>
     <h2 class="h">Stan implementacji i następne kroki</h2>
     <div class="status">
       <div class="done">
@@ -665,16 +705,17 @@ svg.i { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor;
           <li><svg class="i"><use href="#i-check"/></svg>5 presetów vLLM</li>
           <li><svg class="i"><use href="#i-check"/></svg>loop guard, paski postępu</li>
           <li><svg class="i"><use href="#i-check"/></svg>screen 150 przebiegów + przegląd metodologii</li>
+          <li><svg class="i"><use href="#i-check"/></svg>poprawki protokołu, warianty zadań</li>
+          <li><svg class="i"><use href="#i-check"/></svg>sędzia LLM i nowa analiza</li>
+          <li><svg class="i"><use href="#i-check"/></svg>pełny run Qwen 4B (180 przebiegów)</li>
         </ul>
       </div>
       <div class="card next">
         <div class="card-title">Następne</div>
         <ol>
-          <li><span>poprawki protokołu (w toku)</span></li>
-          <li><span>warianty zadań</span></li>
-          <li><span>run: 900 przebiegów (3 powtórzenia)</span></li>
-          <li><span>sędzia LLM i nowa analiza</span></li>
-          <li><span>wyniki i dyskusja</span></li>
+          <li><span>run pozostałych 4 modeli (720 przebiegów)</span></li>
+          <li><span>sędzia i analiza dla wszystkich modeli</span></li>
+          <li><span>wyniki i dyskusja w pracy</span></li>
         </ol>
       </div>
     </div>
