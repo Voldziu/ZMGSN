@@ -1,15 +1,15 @@
 ## 1. Outcome model
 
-- [ ] 1.1 Add `facts` and `requirement` to `OutcomeScore`. Add `format_success` and `reliable` to `RunRecord`, plus an `artifact_valid(judgment)` helper. Keep `success` equal to `format_success`. Old records load.
-- [ ] 1.2 Raise `CHECKS_VERSION` to 3 and update the fingerprint tests.
+- [x] 1.1 Add `facts` and `requirement` to `OutcomeScore`. Add `format_success` and `reliable` to `RunRecord`, plus an `artifact_valid(judgment)` helper. Keep `success` equal to `format_success`. Old records load.
+- [x] 1.2 Raise `CHECKS_VERSION` to 3 and update the fingerprint tests.
 
 ## 2. Deterministic checks
 
-- [ ] 2.1 Add `_cited_ids` (abs/pdf URLs and `arXiv:` ids, versions stripped) and the four fact checks.
+- [x] 2.1 Add `_cited_ids` (abs/pdf URLs and `arXiv:` ids, versions stripped) and the four fact checks.
   - Use the screen cases as fixtures: llama `###` headings, a one-line file with literal `\n`, ids only in the bibliography, invented ids.
-- [ ] 2.2 Add the `table` requirement check. Tests: a table in the right place passes; a missing table fails; a table missing a paper fails; a table after the first paper section fails.
-- [ ] 2.3 Add the `polish` requirement check with `langdetect` (seeded), and add `langdetect` to the dependencies. Tests: Polish summaries pass; English fails; titles and citations are ignored.
-- [ ] 2.4 Wire the facts and the requirement into `evaluate_review` (`no_surveys` stays undefined).
+- [x] 2.2 Add the `table` requirement check. Tests: a table in the right place passes; a missing table fails; a table missing a paper fails; a table after the first paper section fails.
+- [x] 2.3 Add the `polish` requirement check with `langdetect` (seeded), and add `langdetect` to the dependencies. Tests: Polish summaries pass; English fails; titles and citations are ignored.
+- [x] 2.4 Wire the facts and the requirement into `evaluate_review` (`no_surveys` stays undefined).
 
 ## 3. Judge
 

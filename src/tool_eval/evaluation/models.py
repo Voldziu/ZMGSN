@@ -65,9 +65,14 @@ class CriterionResult(BaseModel):
 
 
 class OutcomeScore(BaseModel):
-    """All criteria for a run; `success` means every criterion passed.
+    """All checks of a run.
 
-    Whether the run itself succeeded also depends on its status; see `RunRecord.success`.
+    `criteria` are the format checks (structure, APA references, titles, bibliography); `score`
+    is the fraction of them that passed and `success` whether all did. `facts` are checked on
+    every arXiv id in the file, whatever its formatting. `requirement` is the added requirement
+    of a variant when it can be checked without the judge (`table`, `polish`); it is `None` for
+    base tasks and for `no_surveys`, which the judge decides. Whether the run succeeded also
+    depends on its status; see `RunRecord`.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -75,23 +80,71 @@ class OutcomeScore(BaseModel):
     criteria: list[CriterionResult]
     score: float
     success: bool
+    facts: list[CriterionResult] = []
+    requirement: CriterionResult | None = None
 
     @classmethod
-    def from_criteria(cls, criteria: list[CriterionResult]) -> Self:
-        """Aggregate criteria into a fractional score and an all-or-nothing success flag.
+    def from_criteria(
+        cls,
+        criteria: list[CriterionResult],
+        *,
+        facts: list[CriterionResult] | None = None,
+        requirement: CriterionResult | None = None,
+    ) -> Self:
+        """Aggregate format checks into a fractional score and an all-or-nothing flag.
 
         Args:
-            criteria: Individual check results.
+            criteria: Format check results.
+            facts: Fact check results.
+            requirement: Result of a variant's deterministic requirement check.
 
         Returns:
-            The aggregated score.
+            The aggregated outcome.
         """
         passed = sum(item.passed for item in criteria)
         return cls(
             criteria=criteria,
             score=passed / len(criteria) if criteria else 0.0,
             success=bool(criteria) and passed == len(criteria),
+            facts=facts or [],
+            requirement=requirement,
         )
+
+    @property
+    def facts_pass(self) -> bool | None:
+        """Whether every fact check passed; `None` for records scored before fact checks."""
+        return all(f.passed for f in self.facts) if self.facts else None
+
+
+# Lowest rating (on 1-5) that counts as passing a judge scale.
+JUDGE_PASS = 4
+
+
+class Judgment(BaseModel):
+    """The LLM judge's ratings of one run's review (see `evaluation.judge`).
+
+    Ratings are integers 1-5, or `None` when the judge's answer could not be parsed.
+    `faithfulness` has one rating per sampled summary. `surveys` maps each cited paper of a
+    `no_surveys` variant to whether the judge considers it a survey; `None` for other tasks.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str
+    config_sha256: str
+    judge_sha256: str
+    valid_review: int | None = None
+    relevance: int | None = None
+    faithfulness: list[int | None] = []
+    surveys: dict[str, bool | None] | None = None
+
+    @property
+    def passes(self) -> bool | None:
+        """Every rating at least `JUDGE_PASS`; `None` when a rating is missing."""
+        ratings = [self.valid_review, self.relevance, *self.faithfulness]
+        if not self.faithfulness or any(r is None for r in ratings):
+            return None
+        return all(r is not None and r >= JUDGE_PASS for r in ratings)
 
 
 class CostMetrics(BaseModel):
@@ -227,10 +280,64 @@ class RunRecord(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def success(self) -> bool:
-        """Whether the run succeeded: it completed and passed every check.
+        """Format success: the run completed and passed every format check.
 
         `step_limit`, `loop` and `failed` runs never succeed, even when every check passed; their
         `outcome.score` still gives partial credit. The value is written to the results file
         but recomputed on every read, so records written before this rule follow it too.
         """
         return self.status == "completed" and self.outcome is not None and self.outcome.success
+
+    @property
+    def format_success(self) -> bool:
+        """The run completed and passed every format check (the original success rule)."""
+        return self.success
+
+    @property
+    def reliable(self) -> bool:
+        """The agent ended the run itself (status `completed`)."""
+        return self.status == "completed"
+
+    def artifact_valid(self, judgment: Judgment | None) -> bool | None:
+        """Whether the review is valid whatever the run's status.
+
+        Valid means every fact check passed, every judge rating is at least `JUDGE_PASS` and a
+        variant meets its requirement. `None` when it cannot be decided yet: the judgment or a
+        rating is missing, or the record predates the fact checks.
+
+        Args:
+            judgment: The judge's ratings of this run, if any.
+
+        Returns:
+            True, False or None.
+        """
+        if self.outcome is None:
+            return None
+        facts = self.outcome.facts_pass
+        if facts is False:
+            return False
+        requirement = self._requirement_met(judgment)
+        if requirement is False:
+            return False
+        if facts is None or judgment is None or judgment.passes is None or requirement is None:
+            return None
+        return judgment.passes
+
+    def success_with(self, judgment: Judgment | None) -> bool | None:
+        """Artifact valid and reliable; `None` while artifact validity is undecided."""
+        valid = self.artifact_valid(judgment)
+        if valid is None:
+            return None if self.reliable else False
+        return valid and self.reliable
+
+    def _requirement_met(self, judgment: Judgment | None) -> bool | None:
+        if self.requirement is None:
+            return True
+        if self.requirement == "no_surveys":
+            if judgment is None or judgment.surveys is None:
+                return None
+            if any(judgment.surveys.values()):
+                return False
+            return None if any(v is None for v in judgment.surveys.values()) else True
+        result = self.outcome.requirement if self.outcome else None
+        return None if result is None else result.passed
