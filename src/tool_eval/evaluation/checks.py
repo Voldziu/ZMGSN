@@ -277,6 +277,31 @@ def _paper_blocks(text: str, cited: Sequence[str]) -> tuple[int | None, list[lis
     return first, blocks
 
 
+def paper_sections(text: str) -> list[tuple[str, str]]:
+    """The paper sections of a review as (arXiv id, summary), whatever the heading level.
+
+    A paper section is a heading below the first-level title followed by a line naming an arXiv
+    id; its summary is its text without the heading, URLs and lines naming an id.
+
+    Args:
+        text: Review text.
+
+    Returns:
+        One pair per section, in order.
+    """
+    _, blocks = _paper_blocks(text, cited_ids(text))
+    sections = []
+    for block in blocks:
+        ids = [i for line in block[1:] for i in cited_ids(line)]
+        summary = " ".join(
+            line.strip()
+            for line in block[1:]
+            if line.strip() and not _URL.search(line) and not cited_ids(line)
+        )
+        sections.append((ids[0], summary))
+    return sections
+
+
 def _table_requirement(
     text: str, cited: Sequence[str], papers: Mapping[str, ArxivPaper | None]
 ) -> CriterionResult:

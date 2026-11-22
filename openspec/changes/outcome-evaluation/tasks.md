@@ -13,8 +13,8 @@
 
 ## 3. Judge
 
-- [ ] 3.1 Add Pydantic schemas `ReviewRating`, `SummaryRating` and `SurveyDecision`, and the prompts `judge_review`, `judge_summary` and `judge_survey` (v1).
-- [ ] 3.2 Add `evaluation/judge.py`:
+- [x] 3.1 Add Pydantic schemas `ReviewRating`, `SummaryRating` and `SurveyDecision`, and the prompts `judge_review`, `judge_summary` and `judge_survey` (v1).
+- [x] 3.2 Add `evaluation/judge.py`:
   - inputs: topic, requirement, review text, sampled sections plus source texts, metadata for surveys;
   - structured calls with one retry;
   - seeded section choice;
@@ -22,11 +22,11 @@
   - `<results>.judge.jsonl` writing with skip-on-resume.
 
   Tests use a fake structured LLM: blinding (no model, level or run id in the prompts), determinism, the missing-rating path, resume.
-- [ ] 3.3 Add the CLI `tool-eval judge` and the Makefile target `make judge PRESETS=... JUDGE=qwen`.
+- [x] 3.3 Add the CLI `tool-eval judge` and the Makefile target `make judge PRESETS=... JUDGE=qwen`.
 
 ## 4. Rescore
 
-- [ ] 4.1 Add `evaluation/rescore.py` and the CLI `tool-eval rescore`. Tests: the new file has facts added, the original is unchanged, and a missing workspace is listed.
+- [x] 4.1 Add `evaluation/rescore.py` and the CLI `tool-eval rescore`. Tests: the new file has facts added, the original is unchanged, and a missing workspace is listed.
 
 ## 5. Statistics and report
 
