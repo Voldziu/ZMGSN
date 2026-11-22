@@ -25,5 +25,10 @@
 
 ## 5. Verification
 
-- [ ] 5.1 `make test`, ruff and mypy clean.
-- [ ] 5.2 Smoke run on the Mac: qwen-mid, all levels, `rag-2024h1-table`, `gnn-2023h1-polish`, `diffusion-2023h2-no_surveys`, REPEATS=1. Check the prompts in the trace, the record fields and the variant section of the report.
+- [x] 5.1 `make test`, ruff and mypy clean.
+- [x] 5.2 Smoke run on the Mac: qwen-mid, all levels, `rag-2024h1-table`, `gnn-2023h1-polish`, `diffusion-2023h2-no_surveys`, REPEATS=1. Check the prompts in the trace, the record fields and the variant section of the report.
+
+Notes on 5.2 (2026-11-22, RTX, qwen-mid, one variant per requirement, levels 1–3, one repeat):
+- **Records:** every record carries `task_type=variant`, its requirement and `base_scenario_id`.
+- **Requirements:** rescored with the `outcome-evaluation` checks, `table` and `polish` were met at levels 1 and 2 and failed at level 3. At level 3 there was "no Markdown table before the first paper section" and the "summaries detected as en". This is the effect H1b measures. `no_surveys` waits for the judge.
+- **A format false negative:** level-1 `rag-2024h1-table` failed the format checks because it had 6 `##` sections. Its facts pass and its table is complete, which is the case the fact checks are designed to catch.
